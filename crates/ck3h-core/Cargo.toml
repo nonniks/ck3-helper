@@ -8,14 +8,17 @@ license = "GPL-3.0-or-later"
 testkit = ["dep:tempfile"]
 
 [dependencies]
+chrono = "0.4.45"
 dirs = "6"
 jomini = "0.37"
 rayon = "1"
 rusqlite = { version = "0.43", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
+sysinfo = "0.40"
 tempfile = { version = "3", optional = true }
 thiserror = "2"
 toml = "1"
+uuid = { version = "1.29.3", features = ["v4"] }
 
 [dev-dependencies]
 serde_json = "1"

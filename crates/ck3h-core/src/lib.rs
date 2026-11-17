@@ -1,3 +1,4 @@
+pub mod apply;
 pub mod conflicts;
 pub mod databases;
 pub mod deps;
