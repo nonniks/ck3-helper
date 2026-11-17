@@ -6,6 +6,7 @@ use crate::error::CoreError;
 use crate::index::ModIndex;
 use crate::playset::ModEntry;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;
 
@@ -27,9 +28,9 @@ pub enum MoveReason {
     UserRule { other: String, note: Option<String> },
 }
 
-/// A mod that changes index and is in a constraint the current order breaks, or is linked to
-/// such a mod through a chain of constraints (spec §4.5). Indices are 0-based in the full
-/// playset list, disabled mods included; ids are launcher mod ids.
+/// A mod that changes index and is in a constraint the current order breaks, or is dragged
+/// along by such a mod through a chain of constraints pushing it the way it moved (spec §4.5).
+/// Indices are 0-based in the full playset list, disabled mods included; ids are launcher mod ids.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Move {
     pub mod_id: String,
@@ -186,8 +187,11 @@ pub fn propose(
             reasons.entry(i).or_default().push(reason(c, i, &current));
         }
     }
-    // Mods linked to those through a chain of constraints travel with them. Breadth-first by
-    // distance; a linked mod's reasons are its constraints with mods one step closer.
+    // Mods dragged along: a moved mod pushes the other end of its constraint the same way (an
+    // earlier end moving later pushes the later end later, a later end moving earlier pushes
+    // the earlier end earlier), if that end moved that way too. Breadth-first by distance;
+    // a dragged mod's reasons are the constraints pushing it from one step closer.
+    let shift = |i: usize| to[i].cmp(&i);
     let mut distance: Vec<Option<usize>> = vec![None; current.len()];
     let mut queue: VecDeque<(usize, usize)> = VecDeque::new();
     for &i in reasons.keys() {
@@ -195,11 +199,15 @@ pub fn propose(
         queue.push_back((i, 0));
     }
     while let Some((i, d)) = queue.pop_front() {
-        for c in constraints
-            .iter()
-            .filter(|c| c.earlier == i || c.later == i)
-        {
-            let other = if c.earlier == i { c.later } else { c.earlier };
+        for c in &constraints {
+            let other = match shift(i) {
+                Ordering::Greater if c.earlier == i => c.later,
+                Ordering::Less if c.later == i => c.earlier,
+                _ => continue,
+            };
+            if shift(other) != shift(i) {
+                continue;
+            }
             if distance[other].is_none() {
                 distance[other] = Some(d + 1);
                 queue.push_back((other, d + 1));

@@ -203,6 +203,48 @@ fn dragged_chain_reasons_point_toward_the_broken_constraint() {
 }
 
 #[test]
+fn mod_shifted_up_when_a_dependent_leaves_is_not_dragged() {
+    // A needs L (broken) and F; Y needs F. A moving later frees a slot, so Y and M shift up,
+    // but "Y needs F" cannot push Y earlier: neither is a move.
+    let (_t, mods) = playset(&[
+        on("F", &[]),
+        on("A", &["L", "F"]),
+        on("Y", &["F"]),
+        on("M", &[]),
+        on("L", &[]),
+    ]);
+    let p = sort(&mods, &[]).unwrap();
+    assert_eq!(names(&mods, &p.order), ["F", "Y", "M", "L", "A"]);
+    assert_eq!(moved(&mods, &p), ["A", "L"]);
+}
+
+#[test]
+fn mod_pulled_by_a_later_moving_dependent_is_not_dragged() {
+    // C moves later with A; that cannot pull Z earlier, Z only fills A's old slot.
+    let (_t, mods) = playset(&[
+        on("A", &["L"]),
+        on("Z", &[]),
+        on("C", &["A", "Z"]),
+        on("D", &["C"]),
+        on("M", &[]),
+        on("L", &[]),
+    ]);
+    let p = sort(&mods, &[]).unwrap();
+    assert_eq!(names(&mods, &p.order), ["Z", "M", "L", "A", "C", "D"]);
+    assert_eq!(moved(&mods, &p), ["A", "C", "D", "L"]);
+    let reasons: Vec<Vec<MoveReason>> = p.moves.iter().map(|m| m.reasons.clone()).collect();
+    assert_eq!(
+        reasons,
+        [
+            vec![MoveReason::Dependency { on: id(&mods, "L") }],
+            vec![MoveReason::Dependency { on: id(&mods, "A") }],
+            vec![MoveReason::Dependency { on: id(&mods, "C") }],
+            vec![MoveReason::RequiredBy { by: id(&mods, "A") }],
+        ]
+    );
+}
+
+#[test]
 fn user_rule_applies_and_unknown_rule_is_unresolved() {
     let (_t, mods) = playset(&[on("A", &[]), on("B", &[])]);
     let rules = parse_rules(
