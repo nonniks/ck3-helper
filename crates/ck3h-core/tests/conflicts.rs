@@ -303,6 +303,95 @@ fn vanilla_only_conflict_marked_vanilla() {
 }
 
 #[test]
+fn vanilla_winning_over_a_mod_is_suspicious() {
+    let (_t, mods) = custom(&[(
+        "M",
+        &[
+            ("descriptor.mod", b"name=\"M\"\n"),
+            ("common/traits/00_a.txt", b"brave = { }\n"),
+            ("common/traits/zz_m.txt", b"craven = { }\n"),
+            (
+                "localization/english/zz_m_l_english.yml",
+                "\u{feff}l_english:\n brave:0 \"M\"\n".as_bytes(),
+            ),
+            (
+                "localization/english/aa_m_l_english.yml",
+                "\u{feff}l_english:\n craven:0 \"M\"\n".as_bytes(),
+            ),
+        ],
+    )]);
+    let (_v, vanilla) = vanilla(&[
+        (
+            "common/traits/00_traits.txt",
+            b"brave = { }\ncraven = { }\n",
+        ),
+        (
+            "localization/english/traits_l_english.yml",
+            "\u{feff}l_english:\n brave:0 \"V\"\n craven:0 \"V\"\n".as_bytes(),
+        ),
+    ]);
+    let r = report(&mods, Some(&vanilla));
+    let m = Source::Mod(id(&mods, "M"));
+    for (level, target, winner, verdict) in [
+        (
+            ConflictLevel::Object,
+            "common/traits::brave",
+            Source::Vanilla,
+            Verdict::Suspicious,
+        ),
+        (
+            ConflictLevel::Object,
+            "common/traits::craven",
+            m.clone(),
+            Verdict::Vanilla,
+        ),
+        (
+            ConflictLevel::Loc,
+            "l_english::brave",
+            Source::Vanilla,
+            Verdict::Suspicious,
+        ),
+        (
+            ConflictLevel::Loc,
+            "l_english::craven",
+            m.clone(),
+            Verdict::Vanilla,
+        ),
+    ] {
+        let c = find(&r, level, target);
+        assert_eq!(
+            (&c.winner.source, c.verdict),
+            (&winner, verdict),
+            "{target}"
+        );
+    }
+}
+
+#[test]
+fn replace_path_tolerates_trailing_and_repeated_slashes() {
+    let (_t, mods) = custom(&[
+        (
+            "Old",
+            &[
+                ("descriptor.mod", b"name=\"Old\"\n"),
+                ("history/characters/x.txt", b"1 = { }\n"),
+                ("history/titles/t.txt", b"k_x = { }\n"),
+            ],
+        ),
+        (
+            "TC",
+            &[(
+                "descriptor.mod",
+                b"name=\"TC\"\nreplace_path=\"history/characters/\"\nreplace_path=\"history//titles\"\n",
+            )],
+        ),
+    ]);
+    let files = effective_files(&mods, None);
+    assert!(!files.contains_key("history/characters/x.txt"));
+    assert!(!files.contains_key("history/titles/t.txt"));
+}
+
+#[test]
 fn report_lists_missing_mods_and_is_deterministic() {
     let (_t, mods) = standard();
     let r = report(&mods, None);

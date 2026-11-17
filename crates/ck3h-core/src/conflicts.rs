@@ -33,7 +33,7 @@ pub enum Verdict {
     /// The winning mod depends on every losing mod.
     Intended,
     Suspicious,
-    /// A single mod against vanilla.
+    /// A single mod beating vanilla.
     Vanilla,
 }
 
@@ -269,11 +269,22 @@ fn layers<'a>(active: &[&'a ModEntry], vanilla: Option<&'a ModIndex>) -> Vec<Lay
                 .descriptor
                 .iter()
                 .flat_map(|d| &d.replace_path)
-                .map(|p| normalize(p))
+                .map(|p| replace_folder(p))
                 .collect(),
         })
     });
     vanilla.into_iter().chain(mods).collect()
+}
+
+/// A normalized `replace_path` without repeated or trailing `/`, comparable to `parent_norm()`.
+fn replace_folder(replace_path: &str) -> String {
+    let mut folder = String::new();
+    for c in normalize(replace_path).chars() {
+        if !(c == '/' && folder.ends_with('/')) {
+            folder.push(c);
+        }
+    }
+    folder.trim_end_matches('/').to_string()
 }
 
 /// `(layer, item)` pairs.
@@ -398,9 +409,8 @@ fn conflict(
             others.push(&loser.source);
         }
     }
-    let verdict = if others.len() == 1
-        && (winner.source == Source::Vanilla || *others[0] == Source::Vanilla)
-    {
+    // A mod that loses to vanilla never takes effect: that stays suspicious.
+    let verdict = if others.len() == 1 && *others[0] == Source::Vanilla {
         Verdict::Vanilla
     } else if let Source::Mod(winner_id) = &winner.source
         && others.iter().all(|other| match other {
