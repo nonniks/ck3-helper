@@ -1,5 +1,6 @@
 use crate::error::CoreError;
 use rusqlite::{Connection, OpenFlags};
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 pub const LAUNCHER_DB_FILE: &str = "launcher-v2.sqlite";
@@ -13,18 +14,18 @@ pub const READ_COLUMNS: &[(&str, &[&str])] = &[
     ),
     (
         "mods",
-        &["id", "displayName", "steamId", "source", "dirPath"],
+        &["id", "displayName", "steamId", "source", "dirPath", "name"],
     ),
 ];
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Playset {
     pub id: String,
     pub name: String,
     pub is_active: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PlaysetMod {
     pub mod_id: String,
     pub display_name: String,

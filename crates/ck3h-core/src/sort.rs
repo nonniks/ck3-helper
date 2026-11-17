@@ -12,6 +12,7 @@ use std::path::Path;
 
 /// `before` loads earlier than `after`; both are `descriptor.mod` names or `steam:<id>`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Rule {
     pub before: String,
     pub after: String,
@@ -60,6 +61,7 @@ pub struct SortProposal {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RulesFile {
     #[serde(default)]
     rule: Vec<Rule>,
@@ -74,7 +76,7 @@ pub fn load_rules(path: &Path) -> Result<Vec<Rule>, CoreError> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(e.into()),
+        Err(e) => return Err(CoreError::Rules(format!("{}: {e}", path.display()))),
     };
     parse(&text).map_err(|e| CoreError::Rules(format!("{}: {e}", path.display())))
 }

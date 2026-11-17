@@ -115,6 +115,24 @@ fn schema_drift_reports_missing_column() {
 }
 
 #[test]
+fn schema_drift_reports_missing_mods_name_column() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("drift.sqlite");
+    let conn = Connection::open(&p).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE playsets (id, name, isActive, isRemoved);
+         CREATE TABLE playsets_mods (playsetId, modId, enabled, position);
+         CREATE TABLE mods (id, displayName, steamId, source, dirPath);",
+    )
+    .unwrap();
+    drop(conn);
+    assert!(matches!(
+        LauncherDb::open_read_only(&p),
+        Err(CoreError::Schema { table, column }) if table == "mods" && column == "name"
+    ));
+}
+
+#[test]
 fn dlcs_and_playset_count_helpers() {
     let (_d, path, conn) = setup();
     let ps = add_playset(&conn, "Main", true);

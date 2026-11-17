@@ -2,7 +2,7 @@
 
 // CK3 `COMMON_DIRS` copied verbatim from ck3-tiger `src/ck3/tables/misc.rs`
 // (https://github.com/amtep/tiger, "LAST UPDATED CK3 VERSION 1.19.0").
-// ck3-tiger is GPL-3.0; this project is GPL-3.0-or-later, so the copy is compatible.
+// ck3-tiger is GPL-3.0-or-later, the same license as this project, so the copy is compatible.
 pub const COMMON_DATABASES: &[&str] = &[
     "common/accolade_icons",
     "common/accolade_names",

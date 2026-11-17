@@ -179,7 +179,7 @@ fn running_launcher_blocks_apply() {
     let fx = setup();
     let exe = std::env::current_exe().unwrap();
     let name = exe.file_name().unwrap().to_string_lossy().to_string();
-    // macOS truncates process names to 15 characters
+    // sysinfo 0.40 takes the process name from the executable path on macOS; keep it short anyway
     let pattern: String = name.chars().take(15).collect();
     let e = apply_order(
         &fx.db,

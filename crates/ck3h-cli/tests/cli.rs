@@ -72,15 +72,20 @@ fn sort_dry_run_does_not_write() {
     assert_eq!(playset_count(&ud.join("launcher-v2.sqlite")), 1);
 }
 
-#[test]
-fn sort_reports_moves_from_rules() {
-    let (tmp, ud) = fixture();
-    let rules = tmp.path().join("rules.toml");
+fn swap_rules(dir: &Path) -> PathBuf {
+    let rules = dir.join("rules.toml");
     std::fs::write(
         &rules,
         "[[rule]]\nbefore = \"Base B\"\nafter = \"Base A\"\nnote = \"B first\"\n",
     )
     .unwrap();
+    rules
+}
+
+#[test]
+fn sort_reports_moves_from_rules() {
+    let (tmp, ud) = fixture();
+    let rules = swap_rules(tmp.path());
     cmd(&ud)
         .arg("sort")
         .arg("--rules")
@@ -97,11 +102,16 @@ fn sort_reports_moves_from_rules() {
 
 #[test]
 fn sort_apply_pins_the_outcome_for_the_launcher_state() {
-    let (_tmp, ud) = fixture();
+    let (tmp, ud) = fixture();
+    let rules = swap_rules(tmp.path());
     let launcher_running =
         !ck3h_core::apply::launcher_processes(ck3h_core::apply::DEFAULT_LAUNCHER_PROCESS_NAMES)
             .is_empty();
-    let out = cmd(&ud).args(["sort", "--apply"]).output().unwrap();
+    let out = cmd(&ud)
+        .args(["sort", "--apply", "--rules"])
+        .arg(&rules)
+        .output()
+        .unwrap();
     let db = ud.join("launcher-v2.sqlite");
     if launcher_running {
         assert_eq!(out.status.code(), Some(2));
@@ -227,4 +237,108 @@ fn calibrate_without_log_fails() {
         .arg(&game)
         .assert()
         .code(1);
+}
+
+#[test]
+fn closed_stdout_pipe_is_not_a_panic() {
+    let (_tmp, ud) = fixture();
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_ck3h"))
+        .arg("--user-dir")
+        .arg(&ud)
+        .env("HOME", &ud)
+        .env("XDG_CONFIG_HOME", &ud)
+        .arg("conflicts")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    drop(child.stdout.take()); // the reader goes away before the child writes
+    let out = child.wait_with_output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!stderr.contains("panicked"), "{stderr}");
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+}
+
+#[test]
+fn explicit_missing_rules_file_fails() {
+    let (tmp, ud) = fixture();
+    let missing = tmp.path().join("nope_rules.toml");
+    cmd(&ud)
+        .arg("sort")
+        .arg("--rules")
+        .arg(&missing)
+        .assert()
+        .code(1)
+        .stderr(contains("nope_rules.toml"));
+}
+
+#[test]
+fn misspelled_rules_file_fails_naming_the_file() {
+    let (tmp, ud) = fixture();
+    let rules = tmp.path().join("typo_rules.toml");
+    std::fs::write(&rules, "[[rules]]\nbefore = \"A\"\nafter = \"B\"\n").unwrap();
+    cmd(&ud)
+        .arg("sort")
+        .arg("--rules")
+        .arg(&rules)
+        .assert()
+        .code(1)
+        .stderr(contains("typo_rules.toml"));
+}
+
+#[test]
+fn index_warnings_are_printed() {
+    let (_tmp, ud) = fixture();
+    for args in [&["conflicts"][..], &["sort"][..]] {
+        cmd(&ud)
+            .args(args)
+            .assert()
+            .success()
+            .stdout(contains("warning: Broken: "));
+    }
+}
+
+#[test]
+fn usage_errors_do_not_use_exit_code_2() {
+    let (_tmp, ud) = fixture();
+    cmd(&ud).arg("bogus").assert().code(1);
+    cmd(&ud).arg("--help").assert().code(0);
+}
+
+#[test]
+fn invalid_game_folder_fails_for_conflicts_and_sort() {
+    let (tmp, ud) = fixture();
+    let bad = tmp.path().join("no_such_game");
+    for sub in ["conflicts", "sort"] {
+        cmd(&ud)
+            .arg(sub)
+            .arg("--game")
+            .arg(&bad)
+            .assert()
+            .code(1)
+            .stderr(contains("not a CK3 game folder (no common/): "))
+            .stderr(contains("no_such_game"));
+    }
+}
+
+#[test]
+fn sort_apply_with_sorted_order_writes_nothing() {
+    let (_tmp, ud) = fixture();
+    cmd(&ud)
+        .args(["sort", "--apply"])
+        .assert()
+        .success()
+        .stdout(contains("nothing to apply: the order is already sorted"));
+    assert_eq!(playset_count(&ud.join("launcher-v2.sqlite")), 1);
+}
+
+#[test]
+fn help_describes_json_and_apply() {
+    let (_tmp, ud) = fixture();
+    cmd(&ud)
+        .args(["sort", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("only flag that writes"))
+        .stdout(contains("Print JSON"));
 }

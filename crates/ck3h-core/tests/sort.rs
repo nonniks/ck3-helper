@@ -342,3 +342,28 @@ fn malformed_rules_are_an_error() {
         Err(CoreError::Rules(_))
     ));
 }
+
+#[test]
+fn unknown_rule_keys_are_an_error_naming_the_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("rules.toml");
+    for text in [
+        "[[rules]]\nbefore = \"A\"\nafter = \"B\"\n",
+        "[[rule]]\nbefore = \"A\"\nafter = \"B\"\nnotes = \"typo\"\n",
+    ] {
+        std::fs::write(&path, text).unwrap();
+        let e = load_rules(&path).unwrap_err();
+        assert!(matches!(e, CoreError::Rules(_)));
+        assert!(e.to_string().contains("rules.toml"), "{e}");
+    }
+}
+
+#[test]
+fn unreadable_rules_path_names_the_path() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = load_rules(tmp.path()).unwrap_err();
+    assert!(
+        e.to_string().contains(&tmp.path().display().to_string()),
+        "{e}"
+    );
+}

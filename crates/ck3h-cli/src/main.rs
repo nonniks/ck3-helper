@@ -15,6 +15,7 @@ use ck3h_core::sort::{MoveReason, SortProposal, load_rules, propose};
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -25,7 +26,8 @@ use std::process::ExitCode;
     about = "Crusader Kings III mod conflict analysis"
 )]
 struct Cli {
-    /// CK3 user directory (default: the platform's Documents/Paradox Interactive/Crusader Kings III).
+    /// CK3 user directory. Default: `Documents/Paradox Interactive/Crusader Kings III` on
+    /// Windows and macOS, `~/.local/share/Paradox Interactive/Crusader Kings III` on Linux.
     #[arg(long, global = true)]
     user_dir: Option<PathBuf>,
     #[command(subcommand)]
@@ -36,6 +38,7 @@ struct Cli {
 enum Command {
     /// List launcher playsets.
     Playsets {
+        /// Print JSON instead of text.
         #[arg(long)]
         json: bool,
     },
@@ -43,6 +46,7 @@ enum Command {
     Conflicts {
         #[command(flatten)]
         target: Target,
+        /// Print JSON instead of text.
         #[arg(long)]
         json: bool,
     },
@@ -50,11 +54,15 @@ enum Command {
     Sort {
         #[command(flatten)]
         target: Target,
-        /// Rules file (default: <config dir>/ck3-helper/rules.toml).
+        /// Rules file (default: <config dir>/ck3-helper/rules.toml, which may be absent; an explicit
+        /// path must exist).
         #[arg(long)]
         rules: Option<PathBuf>,
+        /// Print JSON instead of text.
         #[arg(long)]
         json: bool,
+        /// Write the proposed order as a NEW playset (after a backup of the launcher database).
+        /// The only flag that writes anything; refuses while the Paradox Launcher is running.
         #[arg(long)]
         apply: bool,
     },
@@ -62,6 +70,7 @@ enum Command {
     Calibrate {
         #[command(flatten)]
         target: Target,
+        /// Print JSON instead of text.
         #[arg(long)]
         json: bool,
     },
@@ -75,7 +84,8 @@ struct Target {
     /// Localization language (default: the game's language, else l_english).
     #[arg(long)]
     lang: Option<String>,
-    /// Path to the game's `game/` folder, to include vanilla files.
+    /// Path to the game's `game/` folder, to include vanilla files (calibrate defaults to the
+    /// Steam install).
     #[arg(long)]
     game: Option<PathBuf>,
 }
@@ -83,6 +93,13 @@ struct Target {
 enum Failure {
     Core(CoreError),
     Message(String),
+    Output(io::Error),
+}
+
+impl From<io::Error> for Failure {
+    fn from(e: io::Error) -> Self {
+        Failure::Output(e)
+    }
 }
 
 impl From<CoreError> for Failure {
@@ -101,15 +118,28 @@ fn exit_for(failure: &Failure) -> (u8, String) {
         ),
         Failure::Core(e) => (1, format!("error: {e}")),
         Failure::Message(m) => (1, format!("error: {m}")),
+        // A reader that stops early (`ck3h conflicts | head`) is not an error.
+        Failure::Output(e) if e.kind() == io::ErrorKind::BrokenPipe => (0, String::new()),
+        Failure::Output(e) => (1, format!("error: cannot write output: {e}")),
     }
 }
 
 fn main() -> ExitCode {
-    match run(Cli::parse()) {
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(e) if !e.use_stderr() => e.exit(), // --help, --version
+        Err(e) => {
+            let _ = e.print();
+            return ExitCode::from(1); // exit code 2 means "launcher running"
+        }
+    };
+    match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(failure) => {
             let (code, message) = exit_for(&failure);
-            eprintln!("{message}");
+            if !message.is_empty() {
+                let _ = writeln!(io::stderr(), "{message}");
+            }
             ExitCode::from(code)
         }
     }
@@ -124,22 +154,25 @@ fn run(cli: Cli) -> Outcome {
             ));
         }
     };
+    let mut out = io::stdout().lock();
+    let out = &mut out;
     match cli.command {
-        Command::Playsets { json } => playsets(&user_dir, json),
-        Command::Conflicts { target, json } => conflicts(&user_dir, &target, json),
+        Command::Playsets { json } => playsets(out, &user_dir, json),
+        Command::Conflicts { target, json } => conflicts(out, &user_dir, &target, json),
         Command::Sort {
             target,
             rules,
             json,
             apply,
-        } => sort(&user_dir, &target, rules, json, apply),
-        Command::Calibrate { target, json } => calibrate_cmd(&user_dir, &target, json),
+        } => sort(out, &user_dir, &target, rules, json, apply),
+        Command::Calibrate { target, json } => calibrate_cmd(out, &user_dir, &target, json),
     }
 }
 
-fn print_json<T: Serialize>(value: &T) -> Outcome {
+fn print_json<T: Serialize>(out: &mut impl Write, value: &T) -> Outcome {
     let text = serde_json::to_string_pretty(value).map_err(|e| Failure::Message(e.to_string()))?;
-    println!("{text}");
+    writeln!(out, "{text}")?;
+    out.flush()?;
     Ok(())
 }
 
@@ -148,6 +181,15 @@ struct Loaded {
     playset: Playset,
     mods: Vec<ModEntry>,
     vanilla: Option<ModIndex>,
+}
+
+fn valid_game_dir(path: &Path) -> Result<PathBuf, Failure> {
+    game_dir_if_valid(path).ok_or_else(|| {
+        Failure::Message(format!(
+            "not a CK3 game folder (no common/): {}",
+            path.display()
+        ))
+    })
 }
 
 fn load(user_dir: &Path, target: &Target) -> Result<Loaded, Failure> {
@@ -172,7 +214,7 @@ fn load(user_dir: &Path, target: &Target) -> Result<Loaded, Failure> {
     let vanilla = target
         .game
         .as_deref()
-        .map(|g| index_vanilla(g, &lang))
+        .map(|g| index_vanilla(&valid_game_dir(g)?, &lang).map_err(Failure::from))
         .transpose()?;
     Ok(Loaded {
         db_path,
@@ -201,7 +243,7 @@ struct PlaysetRow {
     enabled: usize,
 }
 
-fn playsets(user_dir: &Path, json: bool) -> Outcome {
+fn playsets(out: &mut impl Write, user_dir: &Path, json: bool) -> Outcome {
     let db_path = user_dir.join(LAUNCHER_DB_FILE);
     if !db_path.is_file() {
         return Err(Failure::Message(format!(
@@ -222,12 +264,17 @@ fn playsets(user_dir: &Path, json: bool) -> Outcome {
         });
     }
     if json {
-        return print_json(&rows);
+        return print_json(out, &rows);
     }
     for r in &rows {
         let mark = if r.active { '*' } else { ' ' };
-        println!("{mark} {} ({} mods, {} enabled)", r.name, r.mods, r.enabled);
+        writeln!(
+            out,
+            "{mark} {} ({} mods, {} enabled)",
+            r.name, r.mods, r.enabled
+        )?;
     }
+    out.flush()?;
     Ok(())
 }
 
@@ -255,7 +302,11 @@ fn reason_word(r: WinReason) -> &'static str {
     }
 }
 
-fn print_conflicts(report: &ConflictReport, mods: &[ModEntry]) {
+fn print_conflicts(
+    out: &mut impl Write,
+    report: &ConflictReport,
+    mods: &[ModEntry],
+) -> io::Result<()> {
     let names = names(mods);
     for c in &report.conflicts {
         let verdict = match c.verdict {
@@ -264,46 +315,77 @@ fn print_conflicts(report: &ConflictReport, mods: &[ModEntry]) {
             Verdict::Vanilla => "vanilla",
         };
         let losers: Vec<String> = c.losers.iter().map(|l| source_name(&names, l)).collect();
-        println!(
+        writeln!(
+            out,
             "[{verdict}] {} {} — winner: {}; losers: {} ({})",
             level_word(c.level),
             c.target,
             source_name(&names, &c.winner),
             losers.join(", "),
             reason_word(c.reason)
-        );
+        )?;
     }
     for id in &report.missing_mods {
-        println!("missing on disk: {}", name_of(&names, id));
+        writeln!(out, "missing on disk: {}", name_of(&names, id))?;
     }
     for issue in &report.dep_issues {
         let kind = match issue.kind {
             DepIssueKind::Missing => "missing",
             DepIssueKind::Ambiguous => "ambiguous",
         };
-        println!(
+        writeln!(
+            out,
             "dependency {kind}: {} -> {}",
             name_of(&names, &issue.mod_id),
             issue.dependency
-        );
+        )?;
     }
     for (id, paths) in &report.replace_paths {
         for path in paths {
-            println!("replaces vanilla folder: {} -> {path}", name_of(&names, id));
+            writeln!(
+                out,
+                "replaces vanilla folder: {} -> {path}",
+                name_of(&names, id)
+            )?;
         }
     }
     for id in &report.compatches {
-        println!("compatch: {}", name_of(&names, id));
+        writeln!(out, "compatch: {}", name_of(&names, id))?;
     }
+    Ok(())
 }
 
-fn conflicts(user_dir: &Path, target: &Target, json: bool) -> Outcome {
+fn conflicts(out: &mut impl Write, user_dir: &Path, target: &Target, json: bool) -> Outcome {
     let l = load(user_dir, target)?;
     let report = analyze(&l.mods, &build_dep_graph(&l.mods), l.vanilla.as_ref());
     if json {
-        return print_json(&report);
+        return print_json(out, &report);
     }
-    print_conflicts(&report, &l.mods);
+    print_conflicts(out, &report, &l.mods)?;
+    print_warnings(out, &l)?;
+    out.flush()?;
+    Ok(())
+}
+
+/// One line per index warning (spec §5): broken files do not stop the analysis, but are shown.
+fn print_warnings(out: &mut impl Write, l: &Loaded) -> io::Result<()> {
+    let mut sources: Vec<(&str, &ModIndex)> = l
+        .mods
+        .iter()
+        .filter_map(|m| Some((m.name.as_str(), m.index.as_ref()?)))
+        .collect();
+    if let Some(v) = &l.vanilla {
+        sources.push(("vanilla", v));
+    }
+    for (name, index) in sources {
+        for w in &index.warnings {
+            if w.file.is_empty() {
+                writeln!(out, "warning: {name}: {}", w.message)?;
+            } else {
+                writeln!(out, "warning: {name}: {}: {}", w.file, w.message)?;
+            }
+        }
+    }
     Ok(())
 }
 
@@ -340,6 +422,7 @@ fn reason_text(
 }
 
 fn sort(
+    out: &mut impl Write,
     user_dir: &Path,
     target: &Target,
     rules: Option<PathBuf>,
@@ -347,30 +430,45 @@ fn sort(
     apply: bool,
 ) -> Outcome {
     let l = load(user_dir, target)?;
-    let rules_path =
-        rules.or_else(|| dirs::config_dir().map(|d| d.join("ck3-helper").join("rules.toml")));
-    let rules = match rules_path {
+    let rules = match rules {
+        Some(path) if !path.is_file() => {
+            return Err(Failure::Message(format!(
+                "rules file not found: {}",
+                path.display()
+            )));
+        }
         Some(path) => load_rules(&path)?,
-        None => Vec::new(),
+        // The default location may be absent; `load_rules` then means "no rules".
+        None => match dirs::config_dir() {
+            Some(d) => load_rules(&d.join("ck3-helper").join("rules.toml"))?,
+            None => Vec::new(),
+        },
     };
     let deps = build_dep_graph(&l.mods);
     let proposal = propose(&l.mods, &deps, &rules, l.vanilla.as_ref())?;
-    let applied = if apply {
-        Some(apply_order(
+    let nothing_to_apply = proposal.moves.is_empty();
+    let applied = if apply && !nothing_to_apply {
+        let applied = apply_order(
             &l.db_path,
             &l.playset.id,
             &proposal.order,
             chrono::Local::now(),
             DEFAULT_LAUNCHER_PROCESS_NAMES,
-        )?)
+        )?;
+        // The write is done: say so even if stdout is already gone.
+        let _ = writeln!(io::stderr(), "{}", applied_line(&applied));
+        Some(applied)
     } else {
         None
     };
     if json {
-        return print_json(&SortOutput {
-            proposal: &proposal,
-            applied: applied.as_ref(),
-        });
+        return print_json(
+            out,
+            &SortOutput {
+                proposal: &proposal,
+                applied: applied.as_ref(),
+            },
+        );
     }
     let names = names(&l.mods);
     for m in &proposal.moves {
@@ -379,91 +477,105 @@ fn sort(
             .iter()
             .map(|r| reason_text(&names, &proposal, &m.mod_id, r))
             .collect();
-        println!(
+        writeln!(
+            out,
             "move {}: #{} -> #{} ({})",
             name_of(&names, &m.mod_id),
             m.from + 1,
             m.to + 1,
             reasons.join(", ")
-        );
+        )?;
     }
-    println!("winner changes: {}", proposal.winner_changes.len());
+    writeln!(out, "winner changes: {}", proposal.winner_changes.len())?;
     for w in &proposal.winner_changes {
-        println!(
+        writeln!(
+            out,
             "winner change: {} {}: {} -> {}",
             level_word(w.level),
             w.target,
             source_name(&names, &w.before),
             source_name(&names, &w.after)
-        );
+        )?;
     }
     for r in &proposal.unresolved_rules {
-        println!("unresolved rule: {} before {}", r.before, r.after);
+        writeln!(out, "unresolved rule: {} before {}", r.before, r.after)?;
+    }
+    print_warnings(out, &l)?;
+    if apply && nothing_to_apply {
+        writeln!(out, "nothing to apply: the order is already sorted")?;
     }
     if let Some(a) = &applied {
-        println!(
-            "created playset \"{}\"; backup: {}",
-            a.new_playset_name,
-            a.backup_path.display()
-        );
+        writeln!(out, "{}", applied_line(a))?;
     }
+    out.flush()?;
     Ok(())
 }
 
-fn print_calibration(report: &CalibrationReport, mods: &[ModEntry]) {
-    println!(
+fn applied_line(a: &ApplyResult) -> String {
+    format!(
+        "created playset \"{}\"; backup: {}",
+        a.new_playset_name,
+        a.backup_path.display()
+    )
+}
+
+fn print_calibration(
+    out: &mut impl Write,
+    report: &CalibrationReport,
+    mods: &[ModEntry],
+) -> io::Result<()> {
+    writeln!(
+        out,
         "matched: {}, mismatched: {}, unknown in log: {}, predicted but not logged: {}",
         report.matched,
         report.mismatched.len(),
         report.log_unknown.values().sum::<usize>(),
         report.predicted_not_logged.len()
-    );
+    )?;
     for m in &report.mismatched {
-        println!(
+        writeln!(
+            out,
             "mismatch: {} {}: log has {}, predicted {}",
             m.database, m.key, m.log_file, m.predicted_file
-        );
+        )?;
     }
     if !report.logged_single_definition.is_empty() {
-        println!(
+        writeln!(
+            out,
             "logged with a single definition here: {}",
             report.logged_single_definition.values().sum::<usize>()
-        );
+        )?;
         for (db, n) in &report.logged_single_definition {
-            println!("  {db}: {n}");
+            writeln!(out, "  {db}: {n}")?;
         }
     }
     if !report.log_unknown.is_empty() {
-        println!("unknown by database:");
+        writeln!(out, "unknown by database:")?;
         for (db, n) in &report.log_unknown {
-            println!("  {db}: {n}");
+            writeln!(out, "  {db}: {n}")?;
         }
     }
     if report.truncated {
-        println!("warning: log is truncated");
+        writeln!(out, "warning: log is truncated")?;
     }
     if let Some(rc) = &report.run_check
         && (!rc.not_in_last_run.is_empty() || !rc.only_in_last_run.is_empty())
     {
-        println!("warning: log is from a different set of mods");
+        writeln!(out, "warning: log is from a different set of mods")?;
         let names = names(mods);
         for id in &rc.not_in_last_run {
-            println!("  not in last run: {}", name_of(&names, id));
+            writeln!(out, "  not in last run: {}", name_of(&names, id))?;
         }
         for shown in &rc.only_in_last_run {
-            println!("  only in last run: {shown}");
+            writeln!(out, "  only in last run: {shown}")?;
         }
     }
+    Ok(())
 }
 
-fn calibrate_cmd(user_dir: &Path, target: &Target, json: bool) -> Outcome {
+fn calibrate_cmd(out: &mut impl Write, user_dir: &Path, target: &Target, json: bool) -> Outcome {
     let game = match &target.game {
-        Some(path) => game_dir_if_valid(path).ok_or_else(|| {
-            Failure::Message(format!(
-                "not a CK3 game folder (no common/): {}",
-                path.display()
-            ))
-        })?,
+        Some(path) => path.clone(),
         None => default_game_dir().ok_or_else(|| {
             Failure::Message("calibrate needs the game folder: pass --game <path to game/>".into())
         })?,
@@ -486,9 +598,11 @@ fn calibrate_cmd(user_dir: &Path, target: &Target, json: bool) -> Outcome {
         run_check,
     );
     if json {
-        return print_json(&report);
+        return print_json(out, &report);
     }
-    print_calibration(&report, &l.mods);
+    print_calibration(out, &report, &l.mods)?;
+    print_warnings(out, &l)?;
+    out.flush()?;
     Ok(())
 }
 
@@ -506,6 +620,14 @@ mod tests {
                 "Close the Paradox Launcher first: Paradox Launcher".to_string()
             )
         );
+    }
+
+    #[test]
+    fn broken_pipe_is_a_quiet_success() {
+        let f = Failure::Output(io::ErrorKind::BrokenPipe.into());
+        assert_eq!(exit_for(&f), (0, String::new()));
+        let f = Failure::Output(io::ErrorKind::PermissionDenied.into());
+        assert_eq!(exit_for(&f).0, 1);
     }
 
     #[test]
