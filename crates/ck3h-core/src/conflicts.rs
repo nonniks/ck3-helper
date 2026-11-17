@@ -132,7 +132,22 @@ pub fn resolve_loc(
 }
 
 pub fn analyze(mods: &[ModEntry], deps: &DepGraph, vanilla: Option<&ModIndex>) -> ConflictReport {
-    let active = active(mods);
+    let mut by_position: Vec<&ModEntry> = mods.iter().collect();
+    by_position.sort_by_key(|m| m.position);
+    analyze_ordered(&by_position, deps, vanilla)
+}
+
+/// `analyze` for mods already in load order; `position` is ignored.
+pub(crate) fn analyze_ordered(
+    mods: &[&ModEntry],
+    deps: &DepGraph,
+    vanilla: Option<&ModIndex>,
+) -> ConflictReport {
+    let active: Vec<&ModEntry> = mods
+        .iter()
+        .copied()
+        .filter(|m| m.enabled && !m.missing)
+        .collect();
     let layers = layers(&active, vanilla);
     let files = loaded_files(&layers);
     let mut conflicts = Vec::new();
@@ -192,11 +207,9 @@ pub fn analyze(mods: &[ModEntry], deps: &DepGraph, vanilla: Option<&ModIndex>) -
     }
     conflicts.sort_by(|a, b| (a.level, &a.target).cmp(&(b.level, &b.target)));
 
-    let mut by_position: Vec<&ModEntry> = mods.iter().collect();
-    by_position.sort_by_key(|m| m.position);
     ConflictReport {
         conflicts,
-        missing_mods: by_position
+        missing_mods: mods
             .iter()
             .filter(|m| m.enabled && m.missing)
             .map(|m| m.id.clone())
