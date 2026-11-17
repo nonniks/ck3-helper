@@ -318,12 +318,18 @@ fn top_level_keys(text: &str) -> Result<Vec<String>, String> {
     if !braces_balanced(text) {
         return Err("unbalanced braces".into());
     }
-    Ok(tape
-        .utf8_reader()
-        .fields()
+    let reader = tape.utf8_reader();
+    let mut fields = reader.fields();
+    let keys = fields
+        .by_ref()
         .map(|(key, _, _)| key.read_string())
         .filter(|key| !key.starts_with('@'))
-        .collect())
+        .collect();
+    // jomini accepts a stray value at top level and stops yielding fields there.
+    if !fields.remainder().is_empty() {
+        return Err("unexpected value at top level".into());
+    }
+    Ok(keys)
 }
 
 /// Counts braces outside quoted strings and `#` comments: jomini accepts some unbalanced files.

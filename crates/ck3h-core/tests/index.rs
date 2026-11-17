@@ -179,6 +179,19 @@ fn broken_inputs_give_warnings_and_continue() {
 }
 
 #[test]
+fn stray_top_level_value_breaks_file() {
+    let idx = index(&[("common/traits/stray.txt", b"a = { }\nstray\nc = { }")]);
+    assert_eq!(
+        idx.warnings,
+        [IndexWarning {
+            file: "common/traits/stray.txt".into(),
+            message: "unexpected value at top level".into()
+        }]
+    );
+    assert!(idx.objects.is_empty());
+}
+
+#[test]
 fn index_types_are_serializable() {
     fn serializable<T: serde::Serialize>() {}
     serializable::<RelPath>();
