@@ -27,8 +27,8 @@ pub enum MoveReason {
     UserRule { other: String, note: Option<String> },
 }
 
-/// A mod in at least one constraint the current order breaks. Indices are 0-based in the
-/// full playset list, disabled mods included; ids are launcher mod ids.
+/// A mod that changes index and is in at least one constraint the current order breaks.
+/// Indices are 0-based in the full playset list, disabled mods included; ids are launcher mod ids.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Move {
     pub mod_id: String,
@@ -203,6 +203,7 @@ pub fn propose(
     }
     let moves: Vec<Move> = reasons
         .into_iter()
+        .filter(|&(i, _)| to[i] != i)
         .map(|(i, reasons)| Move {
             mod_id: current[i].id.clone(),
             from: i,
@@ -211,8 +212,7 @@ pub fn propose(
         })
         .collect();
 
-    // An order that breaks no constraint comes back unchanged, so nothing can change winners.
-    let winner_changes = if moves.is_empty() {
+    let winner_changes = if to.iter().enumerate().all(|(i, &t)| i == t) {
         Vec::new()
     } else {
         winner_changes(&current, &order, deps, vanilla)

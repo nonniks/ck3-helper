@@ -141,6 +141,17 @@ fn unrelated_shifted_mods_are_not_moves() {
 }
 
 #[test]
+fn mod_on_violated_edge_keeping_its_index_is_not_a_move() {
+    // A sits on two violated edges (B needs A, A needs Y) yet ends on index 2 again.
+    let (_t, mods) = playset(&[on("B", &["A"]), on("X", &[]), on("A", &["Y"]), on("Y", &[])]);
+    let p = sort(&mods, &[]).unwrap();
+    assert_eq!(names(&mods, &p.order), ["X", "Y", "A", "B"]);
+    assert_eq!(moved(&mods, &p), ["B", "Y"]);
+    let spans: Vec<(usize, usize)> = p.moves.iter().map(|m| (m.from, m.to)).collect();
+    assert_eq!(spans, [(0, 3), (3, 1)]);
+}
+
+#[test]
 fn user_rule_applies_and_unknown_rule_is_unresolved() {
     let (_t, mods) = playset(&[on("A", &[]), on("B", &[])]);
     let rules = parse_rules(
