@@ -1,3 +1,4 @@
+pub mod conflicts;
 pub mod databases;
 pub mod deps;
 pub mod descriptor;
