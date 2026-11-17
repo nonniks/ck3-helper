@@ -1,9 +1,10 @@
 use crate::error::CoreError;
 use crate::text::decode;
 use jomini::TextTape;
+use serde::Serialize;
 use std::path::Path;
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize)]
 pub struct ModDescriptor {
     pub name: String,
     pub version: Option<String>,

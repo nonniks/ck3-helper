@@ -118,3 +118,91 @@ pub fn playset_dlcs(db: &Path, playset_id: &str) -> Vec<(String, bool)> {
     .collect::<Result<_, _>>()
     .expect("rows")
 }
+
+/// A user dir (`root/user`) with a launcher DB, `pdx_settings.txt` (`l_english`) and the active
+/// playset "Main" of five enabled mods living in `root/mods`: Base A, Base B, A+B Compatch,
+/// Ghost (no folder on disk) and Broken (unbalanced braces, unknown dependency).
+pub fn standard_fixture(root: &Path) -> PathBuf {
+    let user = root.join("user");
+    std::fs::create_dir_all(&user).expect("create user dir");
+    std::fs::write(
+        user.join("pdx_settings.txt"),
+        "\"language\"={\n\tversion=0\n\tvalue=\"l_english\"\n}\n",
+    )
+    .expect("write pdx_settings");
+    let mods = root.join("mods");
+    let conn = create_launcher_db(&user.join("launcher-v2.sqlite"));
+    let playset = add_playset(&conn, "Main", true);
+
+    let a = write_mod(
+        &mods,
+        "base_a",
+        &[
+            ("descriptor.mod", b"name=\"Base A\"\n"),
+            (
+                "common/traits/zz_base_a.txt",
+                b"shared_trait = { a = 1 }\nonly_a = { }\n",
+            ),
+            ("events/shared_events.txt", b"namespace = shared\n"),
+            (
+                "localization/english/base_a_l_english.yml",
+                "\u{feff}l_english:\n shared_key:0 \"From A\"\n".as_bytes(),
+            ),
+        ],
+    );
+    let b = write_mod(
+        &mods,
+        "base_b",
+        &[
+            ("descriptor.mod", b"name=\"Base B\"\n"),
+            ("common/traits/00_base_b.txt", b"shared_trait = { b = 2 }\n"),
+            ("Events/Shared_Events.txt", b"namespace = shared\n"),
+            (
+                "localization/english/base_b_l_english.yml",
+                "\u{feff}l_english:\n shared_key:0 \"From B\"\n".as_bytes(),
+            ),
+        ],
+    );
+    let compat = write_mod(
+        &mods,
+        "compat_ab",
+        &[
+            (
+                "descriptor.mod",
+                b"name=\"A+B Compatch\"\ndependencies={\n\t\"Base A\"\n\t\"Base B\"\n}\n",
+            ),
+            ("common/traits/zzz_compat.txt", b"compat_trait = { }\n"),
+            (
+                "localization/english/replace/compat_l_english.yml",
+                "\u{feff}l_english:\n replace_key:0 \"Compat\"\n".as_bytes(),
+            ),
+        ],
+    );
+    let broken = write_mod(
+        &mods,
+        "broken",
+        &[
+            (
+                "descriptor.mod",
+                b"name=\"Broken\"\ndependencies={\n\t\"Missing Mod\"\n}\n",
+            ),
+            ("common/traits/bad.txt", b"x = { y = 1"),
+        ],
+    );
+    let ghost = mods.join("ghost");
+
+    for (pos, (name, dir)) in [
+        ("Base A", a),
+        ("Base B", b),
+        ("A+B Compatch", compat),
+        ("Ghost", ghost),
+        ("Broken", broken),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let id = add_mod(&conn, name, &dir, None);
+        add_playset_mod(&conn, &playset, &id, pos as i64, true);
+    }
+    user
+}

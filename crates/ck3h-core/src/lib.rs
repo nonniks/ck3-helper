@@ -1,9 +1,11 @@
 pub mod databases;
+pub mod deps;
 pub mod descriptor;
 pub mod error;
 pub mod index;
 pub mod launcher;
 pub mod paths;
+pub mod playset;
 #[cfg(feature = "testkit")]
 pub mod testkit;
 pub mod text;
