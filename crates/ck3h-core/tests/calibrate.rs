@@ -40,10 +40,18 @@ fn calibrate_counts_all_categories() {
             r.mismatched.len(),
             r.log_unknown["common/traits"]
         ),
-        (1, 1, 1)
+        (1, 0, 1)
     );
+    assert_eq!(r.logged_single_definition["common/traits"], 1);
+    let wrong = log_line(
+        "shared_trait",
+        "common/traits",
+        "common/traits/00_base_b.txt",
+    );
+    let r2 = calibrate(&parse_conflicts_log(&wrong), &mods, None, None);
+    assert_eq!((r2.matched, r2.mismatched.len()), (0, 1));
     assert_eq!(
-        r.mismatched[0].predicted_file,
+        r2.mismatched[0].predicted_file,
         "common/traits/zz_base_a.txt"
     );
     assert!(r.predicted_not_logged.is_empty());

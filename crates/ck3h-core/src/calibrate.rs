@@ -41,6 +41,8 @@ pub struct CalibrationReport {
     pub matched: usize,
     pub mismatched: Vec<Mismatch>,
     pub log_unknown: BTreeMap<String, usize>,
+    /// Log lines for which we see only one definition (we missed one), per database.
+    pub logged_single_definition: BTreeMap<String, usize>,
     pub predicted_not_logged: Vec<(String, String)>,
     pub truncated: bool,
     pub run_check: Option<RunCheck>,
@@ -141,18 +143,23 @@ pub fn calibrate(
     let mut matched = 0;
     let mut mismatched = Vec::new();
     let mut log_unknown: BTreeMap<String, usize> = BTreeMap::new();
+    let mut logged_single_definition: BTreeMap<String, usize> = BTreeMap::new();
     for o in &log.overrides {
-        let winner = predicted
-            .get(&(o.database.clone(), o.key.clone()))
-            .and_then(|defs| defs.last());
-        match winner {
+        let defs = predicted.get(&(o.database.clone(), o.key.clone()));
+        match defs {
             None => *log_unknown.entry(o.database.clone()).or_default() += 1,
-            Some(w) if w.file.norm == o.file => matched += 1,
-            Some(w) => mismatched.push(Mismatch {
+            // The log proves the game saw two definitions; we saw one, so we missed one.
+            Some(d) if d.len() < 2 => {
+                *logged_single_definition
+                    .entry(o.database.clone())
+                    .or_default() += 1
+            }
+            Some(d) if d.last().is_some_and(|w| w.file.norm == o.file) => matched += 1,
+            Some(d) => mismatched.push(Mismatch {
                 database: o.database.clone(),
                 key: o.key.clone(),
                 log_file: o.file.clone(),
-                predicted_file: w.file.display.clone(),
+                predicted_file: d.last().map(|w| w.file.display.clone()).unwrap_or_default(),
             }),
         }
     }
@@ -172,6 +179,7 @@ pub fn calibrate(
         matched,
         mismatched,
         log_unknown,
+        logged_single_definition,
         predicted_not_logged,
         truncated: log.truncated,
         run_check,
