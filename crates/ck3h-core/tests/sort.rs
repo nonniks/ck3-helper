@@ -152,6 +152,57 @@ fn mod_on_violated_edge_keeping_its_index_is_not_a_move() {
 }
 
 #[test]
+fn mod_dragged_along_a_dependency_is_a_move() {
+    // A needs L (broken); C, a compatch, needs A (kept) and travels with A past M.
+    let (_t, mods) = playset(&[on("A", &["L"]), on("C", &["A"]), on("M", &[]), on("L", &[])]);
+    let p = sort(&mods, &[]).unwrap();
+    assert_eq!(names(&mods, &p.order), ["M", "L", "A", "C"]);
+    assert_eq!(moved(&mods, &p), ["A", "C", "L"]);
+    assert_eq!(
+        p.moves[1],
+        Move {
+            mod_id: id(&mods, "C"),
+            from: 1,
+            to: 3,
+            reasons: vec![MoveReason::Dependency { on: id(&mods, "A") }],
+        }
+    );
+}
+
+#[test]
+fn dragged_chain_reasons_point_toward_the_broken_constraint() {
+    // D needs C needs A needs L (broken); C also needs Z, which leads away from the chain.
+    let (_t, mods) = playset(&[
+        on("Z", &[]),
+        on("A", &["L"]),
+        on("C", &["A", "Z"]),
+        on("D", &["C"]),
+        on("M", &[]),
+        on("L", &[]),
+    ]);
+    let p = sort(&mods, &[]).unwrap();
+    assert_eq!(names(&mods, &p.order), ["Z", "M", "L", "A", "C", "D"]);
+    assert_eq!(moved(&mods, &p), ["A", "C", "D", "L"]);
+    let reasons = |name: &str| {
+        let id = id(&mods, name);
+        p.moves
+            .iter()
+            .find(|m| m.mod_id == id)
+            .unwrap()
+            .reasons
+            .clone()
+    };
+    assert_eq!(
+        reasons("C"),
+        [MoveReason::Dependency { on: id(&mods, "A") }]
+    );
+    assert_eq!(
+        reasons("D"),
+        [MoveReason::Dependency { on: id(&mods, "C") }]
+    );
+}
+
+#[test]
 fn user_rule_applies_and_unknown_rule_is_unresolved() {
     let (_t, mods) = playset(&[on("A", &[]), on("B", &[])]);
     let rules = parse_rules(

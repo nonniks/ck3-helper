@@ -6,7 +6,7 @@ use crate::error::CoreError;
 use crate::index::ModIndex;
 use crate::playset::ModEntry;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;
 
 /// `before` loads earlier than `after`; both are `descriptor.mod` names or `steam:<id>`.
@@ -27,8 +27,9 @@ pub enum MoveReason {
     UserRule { other: String, note: Option<String> },
 }
 
-/// A mod that changes index and is in at least one constraint the current order breaks.
-/// Indices are 0-based in the full playset list, disabled mods included; ids are launcher mod ids.
+/// A mod that changes index and is in a constraint the current order breaks, or is linked to
+/// such a mod through a chain of constraints (spec §4.5). Indices are 0-based in the full
+/// playset list, disabled mods included; ids are launcher mod ids.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Move {
     pub mod_id: String,
@@ -178,28 +179,38 @@ pub fn propose(
         order[to[i]] = m;
     }
 
+    // Mods on a constraint the current order breaks; their reasons are those constraints.
     let mut reasons: BTreeMap<usize, Vec<MoveReason>> = BTreeMap::new();
     for c in constraints.iter().filter(|c| c.earlier > c.later) {
-        let earlier_id = current[c.earlier].id.clone();
-        let later_id = current[c.later].id.clone();
-        let (for_later, for_earlier) = match c.rule {
-            None => (
-                MoveReason::Dependency { on: earlier_id },
-                MoveReason::RequiredBy { by: later_id },
-            ),
-            Some(rule) => (
-                MoveReason::UserRule {
-                    other: earlier_id,
-                    note: rule.note.clone(),
-                },
-                MoveReason::UserRule {
-                    other: later_id,
-                    note: rule.note.clone(),
-                },
-            ),
-        };
-        reasons.entry(c.later).or_default().push(for_later);
-        reasons.entry(c.earlier).or_default().push(for_earlier);
+        for i in [c.later, c.earlier] {
+            reasons.entry(i).or_default().push(reason(c, i, &current));
+        }
+    }
+    // Mods linked to those through a chain of constraints travel with them. Breadth-first by
+    // distance; a linked mod's reasons are its constraints with mods one step closer.
+    let mut distance: Vec<Option<usize>> = vec![None; current.len()];
+    let mut queue: VecDeque<(usize, usize)> = VecDeque::new();
+    for &i in reasons.keys() {
+        distance[i] = Some(0);
+        queue.push_back((i, 0));
+    }
+    while let Some((i, d)) = queue.pop_front() {
+        for c in constraints
+            .iter()
+            .filter(|c| c.earlier == i || c.later == i)
+        {
+            let other = if c.earlier == i { c.later } else { c.earlier };
+            if distance[other].is_none() {
+                distance[other] = Some(d + 1);
+                queue.push_back((other, d + 1));
+            }
+            if distance[other] == Some(d + 1) {
+                reasons
+                    .entry(other)
+                    .or_default()
+                    .push(reason(c, other, &current));
+            }
+        }
     }
     let moves: Vec<Move> = reasons
         .into_iter()
@@ -223,6 +234,22 @@ pub fn propose(
         winner_changes,
         unresolved_rules,
     })
+}
+
+/// Constraint `c` seen from mod `i`, one of its two ends.
+fn reason(c: &Constraint, i: usize, current: &[&ModEntry]) -> MoveReason {
+    let i_is_later = c.later == i;
+    let other = current[if i_is_later { c.earlier } else { c.later }]
+        .id
+        .clone();
+    match (c.rule, i_is_later) {
+        (None, true) => MoveReason::Dependency { on: other },
+        (None, false) => MoveReason::RequiredBy { by: other },
+        (Some(rule), _) => MoveReason::UserRule {
+            other,
+            note: rule.note.clone(),
+        },
+    }
 }
 
 /// Every mod Kahn's algorithm left still waits for another remaining mod, so following
