@@ -4,6 +4,7 @@ use crate::databases::{OBJECT_ANALYSIS_EXCLUDED, database_root};
 use crate::error::CoreError;
 use crate::text::decode;
 use jomini::TextTape;
+use serde::Serialize;
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fs::{DirEntry, ReadDir};
@@ -20,7 +21,7 @@ pub fn normalize(display: &str) -> String {
 }
 
 /// A path relative to a mod folder: `display` as on disk, `norm` for comparing and sorting.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RelPath {
     pub display: String,
     pub norm: String,
@@ -60,7 +61,7 @@ impl PartialOrd for RelPath {
 }
 
 /// A top-level key of a database file; `ordinal` counts objects within the file.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ObjectDef {
     pub database: String,
     pub key: String,
@@ -69,7 +70,7 @@ pub struct ObjectDef {
 }
 
 /// A localization entry; `ordinal` counts entries within the file.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LocDef {
     pub lang: String,
     pub key: String,
@@ -79,14 +80,14 @@ pub struct LocDef {
     pub ordinal: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct IndexWarning {
     pub file: String,
     pub message: String,
 }
 
 /// Every vector is sorted: files by path, objects and loc by `(file, ordinal)`.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 pub struct ModIndex {
     pub files: Vec<RelPath>,
     pub objects: Vec<ObjectDef>,

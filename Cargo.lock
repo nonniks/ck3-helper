@@ -38,6 +38,7 @@ dependencies = [
  "dirs",
  "jomini",
  "rusqlite",
+ "serde",
  "tempfile",
  "thiserror",
 ]

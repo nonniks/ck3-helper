@@ -11,6 +11,7 @@ testkit = ["dep:tempfile"]
 dirs = "6"
 jomini = "0.37"
 rusqlite = { version = "0.43", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
 tempfile = { version = "3", optional = true }
 thiserror = "2"
 

@@ -170,6 +170,24 @@ pub const COMMON_DATABASES: &[&str] = &[
     "common/vassal_stances",
 ];
 
+// Database folders of the CK3 1.20.1.2 `game/common/` that tiger's list (marked 1.19.0) lacks:
+// the shallowest folder holding `.txt` files and not under a root above. Without them,
+// `common/religion/*` and `common/puppets/*` would collapse into one database each.
+pub const COMMON_DATABASES_SCANNED: &[&str] = &[
+    "common/holy_orders",
+    "common/law_groups",
+    "common/morpheme_strip_rules",
+    "common/puppets/actions",
+    "common/puppets/types",
+    "common/religion/doctrine_category_types",
+    "common/religion/faith_types",
+    "common/religion/rite_icons",
+    "common/religion/rite_names",
+    "common/religion/rite_types",
+    "common/religion/tenet_types",
+    "common/spiritual_fulfillment",
+];
+
 /// `gfx/` databases seen in a real `database_conflicts.log`.
 pub const GFX_DATABASES: &[&str] = &[
     "gfx/portraits/portrait_animations",
@@ -200,6 +218,7 @@ pub const OBJECT_ANALYSIS_EXCLUDED: &[&str] = &[
 pub fn database_root(norm_path: &str) -> Option<String> {
     COMMON_DATABASES
         .iter()
+        .chain(COMMON_DATABASES_SCANNED)
         .chain(GFX_DATABASES)
         .filter(|root| {
             norm_path

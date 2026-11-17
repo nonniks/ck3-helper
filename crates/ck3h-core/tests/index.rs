@@ -76,6 +76,14 @@ fn database_root_longest_prefix() {
         database_root("common/brand_new_dir/x.txt").as_deref(),
         Some("common/brand_new_dir")
     );
+    assert_eq!(
+        database_root("common/religion/rite_types/00_rites.txt").as_deref(),
+        Some("common/religion/rite_types")
+    );
+    assert_eq!(
+        database_root("common/puppets/actions/x.txt").as_deref(),
+        Some("common/puppets/actions")
+    );
     assert_eq!(database_root("events/x.txt"), None);
 }
 
@@ -168,6 +176,16 @@ fn broken_inputs_give_warnings_and_continue() {
     assert_eq!(idx.warnings.len(), 2);
     assert_eq!(keys(&idx.objects), [("common/traits", "ok", 0)]);
     assert_eq!(idx.loc.len(), 1);
+}
+
+#[test]
+fn index_types_are_serializable() {
+    fn serializable<T: serde::Serialize>() {}
+    serializable::<RelPath>();
+    serializable::<ObjectDef>();
+    serializable::<LocDef>();
+    serializable::<IndexWarning>();
+    serializable::<ModIndex>();
 }
 
 #[test]
