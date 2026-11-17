@@ -69,6 +69,9 @@ pub fn apply_order(
     now: DateTime<Local>,
     launcher_names: &[&str],
 ) -> Result<ApplyResult, CoreError> {
+    if launcher_names.is_empty() {
+        return Err(CoreError::NoLauncherNames);
+    }
     let running = launcher_processes(launcher_names);
     if !running.is_empty() {
         return Err(CoreError::LauncherRunning(running));
@@ -101,7 +104,7 @@ pub fn apply_order(
     source_mods.sort();
     wanted.sort();
     if source_mods != wanted {
-        return Err(CoreError::Rules("order does not match playset".into()));
+        return Err(CoreError::OrderMismatch);
     }
 
     check_columns(&conn, WRITE_COLUMNS)?;

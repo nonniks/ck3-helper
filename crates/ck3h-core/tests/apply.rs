@@ -83,7 +83,10 @@ fn order(fx: &Fx, idx: [usize; 3]) -> Vec<String> {
 #[test]
 fn creates_sorted_copy_and_backup() {
     let fx = setup();
+    let before = std::fs::read(&fx.db).unwrap();
     let r = apply_order(&fx.db, &fx.src, &order(&fx, [2, 0, 1]), now(), NONE).unwrap();
+    assert_eq!(std::fs::read(&r.backup_path).unwrap(), before);
+    assert_eq!(playset_count(&r.backup_path), 1);
     assert_eq!(r.new_playset_name, "Main (CK3 Helper)");
     assert!(r.backup_path.exists());
     assert_eq!(
@@ -154,9 +157,10 @@ fn dlc_rows_copied() {
 fn wrong_order_writes_nothing() {
     let fx = setup();
     let e = apply_order(&fx.db, &fx.src, &[fx.ids[0].clone()], now(), NONE).unwrap_err();
-    assert!(matches!(e, CoreError::Rules(_)));
+    assert!(matches!(e, CoreError::OrderMismatch));
     let dup = vec![fx.ids[0].clone(), fx.ids[0].clone(), fx.ids[1].clone()];
-    assert!(apply_order(&fx.db, &fx.src, &dup, now(), NONE).is_err());
+    let e = apply_order(&fx.db, &fx.src, &dup, now(), NONE).unwrap_err();
+    assert!(matches!(e, CoreError::OrderMismatch));
     assert_eq!(playset_count(&fx.db), 1);
     assert_eq!(backups_in(fx.dir.path()), 0);
 }
@@ -208,4 +212,33 @@ fn launcher_is_detected_by_executable_path() {
         found.iter().any(|f| f.contains(&name)),
         "expected the current process in {found:?}"
     );
+}
+
+#[test]
+fn failing_transaction_rolls_back_and_keeps_backup() {
+    let fx = setup_with(Some(
+        "CREATE TRIGGER boom BEFORE INSERT ON playsets_dlcs BEGIN SELECT RAISE(ABORT, 'boom'); END;",
+    ));
+    let e = apply_order(&fx.db, &fx.src, &order(&fx, [2, 0, 1]), now(), NONE).unwrap_err();
+    assert!(matches!(e, CoreError::Db(_)));
+    assert_eq!(playset_count(&fx.db), 1);
+    let conn = Connection::open_with_flags(&fx.db, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+    let stray: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM playsets_mods WHERE playsetId <> ?1",
+            [&fx.src],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(stray, 0);
+    assert_eq!(backups_in(fx.dir.path()), 1);
+}
+
+#[test]
+fn empty_launcher_names_is_refused() {
+    let fx = setup();
+    let e = apply_order(&fx.db, &fx.src, &order(&fx, [2, 0, 1]), now(), &[]).unwrap_err();
+    assert!(matches!(e, CoreError::NoLauncherNames));
+    assert_eq!(playset_count(&fx.db), 1);
+    assert_eq!(backups_in(fx.dir.path()), 0);
 }
