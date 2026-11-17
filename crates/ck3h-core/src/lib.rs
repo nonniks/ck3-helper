@@ -1,5 +1,7 @@
+pub mod databases;
 pub mod descriptor;
 pub mod error;
+pub mod index;
 pub mod launcher;
 pub mod paths;
 #[cfg(feature = "testkit")]
