@@ -116,9 +116,14 @@ fn excluded_and_container_databases_have_no_objects() {
         ),
         ("common/named_colors/c.txt", b"colors = { red = {} }"),
         ("common/landed_titles/t.txt", b"e_x = { k_y = { } }"),
+        (
+            "common/province_terrain/x.txt",
+            b"default_land=plains\n1=mountains\n",
+        ),
     ]);
     assert!(idx.objects.is_empty());
-    assert_eq!(idx.files.len(), 4);
+    assert_eq!(idx.files.len(), 5);
+    assert!(norms(&idx.files).contains(&"common/province_terrain/x.txt"));
 }
 
 #[test]

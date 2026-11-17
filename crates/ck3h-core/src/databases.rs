@@ -211,6 +211,7 @@ pub const OBJECT_ANALYSIS_EXCLUDED: &[&str] = &[
     "common/named_colors",
     "common/coat_of_arms/coat_of_arms",
     "common/landed_titles",
+    "common/province_terrain",
 ];
 
 /// The database a file belongs to: the longest known root containing it, else
