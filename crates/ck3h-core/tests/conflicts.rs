@@ -368,6 +368,33 @@ fn vanilla_winning_over_a_mod_is_suspicious() {
 }
 
 #[test]
+fn object_read_order_is_case_sensitive() {
+    let (_t, mods) = custom(&[(
+        "EPE",
+        &[
+            ("descriptor.mod", b"name=\"EPE\"\n"),
+            (
+                "gfx/portraits/portrait_modifiers/02_EPE_x.txt",
+                b"k = { }\n",
+            ),
+        ],
+    )]);
+    let (_v, vanilla) = vanilla(&[(
+        "gfx/portraits/portrait_modifiers/02_all_x.txt",
+        b"k = { }\n",
+    )]);
+    let r = report(&mods, Some(&vanilla));
+    let c = find(
+        &r,
+        ConflictLevel::Object,
+        "gfx/portraits/portrait_modifiers::k",
+    );
+    assert_eq!(c.winner.source, Source::Vanilla);
+    assert_eq!(sources(&c.losers), [Source::Mod(id(&mods, "EPE"))]);
+    assert_eq!(c.verdict, Verdict::Suspicious);
+}
+
+#[test]
 fn replace_path_tolerates_trailing_and_repeated_slashes() {
     let (_t, mods) = custom(&[
         (

@@ -59,6 +59,11 @@ fn relpath_orders_by_components() {
 }
 
 #[test]
+fn relpath_read_order_is_case_sensitive() {
+    assert!(RelPath::new("common/x/02_EPE_a.txt") < RelPath::new("common/x/02_all_b.txt"));
+}
+
+#[test]
 fn database_root_longest_prefix() {
     assert_eq!(
         database_root("common/decisions/dlc_decisions/ep_3/x.txt").as_deref(),

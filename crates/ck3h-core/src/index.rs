@@ -20,7 +20,8 @@ pub fn normalize(display: &str) -> String {
     }
 }
 
-/// A path relative to a mod folder: `display` as on disk, `norm` for comparing and sorting.
+/// A path relative to a mod folder: `display` as on disk; `norm` decides whether two paths are
+/// the same file. Read order (`Ord`) follows `display`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RelPath {
     pub display: String,
@@ -45,12 +46,13 @@ impl RelPath {
 }
 
 impl Ord for RelPath {
-    /// Component by component on `norm`; `display` breaks ties so that `Ord` agrees with `Eq`.
+    /// The game's read order: component by component on `display`, byte-wise and
+    /// case-sensitive (`02_EPE_…` before `02_all_…`). `norm` breaks ties so `Ord` agrees with `Eq`.
     fn cmp(&self, other: &Self) -> Ordering {
-        self.norm
+        self.display
             .split('/')
-            .cmp(other.norm.split('/'))
-            .then_with(|| self.display.cmp(&other.display))
+            .cmp(other.display.split('/'))
+            .then_with(|| self.norm.cmp(&other.norm))
     }
 }
 
