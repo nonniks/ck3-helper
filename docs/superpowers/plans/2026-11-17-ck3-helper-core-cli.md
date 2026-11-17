@@ -16,7 +16,7 @@
 - Крейты: `crates/ck3h-core` (lib), `crates/ck3h-cli` (bin с именем `ck3h`). `license = "GPL-3.0-or-later"` в каждом `Cargo.toml`.
 - Зависимости (только эти): `rusqlite = { version = "0.43", features = ["bundled"] }`, `jomini = "0.37"`, `rayon`, `serde` (derive), `serde_json`, `toml`, `thiserror`, `sysinfo = "0.40"`, `chrono`, `uuid` (v4), `dirs`, `clap = { version = "4", features = ["derive"] }`; dev: `tempfile`, `assert_cmd`, `predicates`.
 - Ядро не ходит в сеть и пишет на диск только в `apply::apply_order` (база лаунчера и её бэкап). В папки модов не пишет никогда.
-- Пути: разделитель `/`. Нормализованная форма — нижний регистр на Windows и macOS, как есть на Linux (`cfg!(target_os = "linux")`). Сравнение и сортировка — по нормализованной форме, покомпонентно.
+- Пути: разделитель `/`. Нормализованная форма — нижний регистр на Windows и macOS, как есть на Linux (`cfg!(target_os = "linux")`). Совпадение файлов — по нормализованной форме; порядок чтения — по исходному написанию, побайтово, покомпонентно (решение R27, spec §4.2).
 - Детерминизм: одинаковый вход → одинаковый порядок в отчётах (`BTreeMap`/`BTreeSet`, явная сортировка).
 - Вывод CLI — на английском. Все публичные типы отчётов — `#[derive(Debug, Clone, PartialEq, Serialize)]`.
 - Коммит после каждой задачи на ветке `feat/core-cli`, локально, без push. После каждой задачи — ревью агентом `rust-reviewer`; после задач 4, 6, 7, 8, 9 — ещё и `ck3-rules-auditor`.
