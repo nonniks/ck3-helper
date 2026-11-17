@@ -167,3 +167,42 @@ fn steam_prefix_matches_steam_id() {
     assert_eq!(match_name(&mods, "steam:222"), NameMatch::None);
     assert_eq!(match_name(&mods, " s "), NameMatch::One(mods[0].id.clone()));
 }
+
+#[cfg(unix)]
+#[test]
+fn unreadable_mod_does_not_abort_the_playset() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let conn = create_launcher_db(&tmp.path().join("launcher-v2.sqlite"));
+    let ps = add_playset(&conn, "Main", true);
+    let good = write_mod(
+        tmp.path(),
+        "good",
+        &[
+            ("descriptor.mod", b"name=\"Good\""),
+            ("common/traits/t.txt", b"t = { }"),
+        ],
+    );
+    let locked = write_mod(
+        tmp.path(),
+        "locked",
+        &[("descriptor.mod", b"name=\"Locked\"")],
+    );
+    for (i, (name, dir)) in [("Good", &good), ("Locked", &locked)]
+        .into_iter()
+        .enumerate()
+    {
+        let m = add_mod(&conn, name, dir, None);
+        add_playset_mod(&conn, &ps, &m, i as i64, true);
+    }
+    drop(conn);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let mods = load(tmp.path());
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    assert_eq!(mods[0].index.as_ref().unwrap().objects.len(), 1);
+    let idx = mods[1].index.as_ref().unwrap();
+    assert!(idx.files.is_empty() && idx.objects.is_empty() && idx.loc.is_empty());
+    assert_eq!(idx.warnings.len(), 1);
+    assert_eq!(idx.warnings[0].file, "");
+}

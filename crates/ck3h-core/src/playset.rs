@@ -57,7 +57,19 @@ fn load_mod(m: &PlaysetMod, lang: &str) -> Result<ModEntry, CoreError> {
         Err(e) => Some(e),
     };
     if m.enabled {
-        let mut index = index_mod(&m.dir_path, lang)?;
+        let mut index = match index_mod(&m.dir_path, lang) {
+            Ok(index) => index,
+            Err(e) => {
+                entry.index = Some(ModIndex {
+                    warnings: vec![IndexWarning {
+                        file: String::new(),
+                        message: e.to_string(),
+                    }],
+                    ..ModIndex::default()
+                });
+                return Ok(entry);
+            }
+        };
         if let Some(e) = descriptor_error {
             index.warnings.push(IndexWarning {
                 file: "descriptor.mod".into(),
