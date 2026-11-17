@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use sysinfo::{ProcessesToUpdate, System};
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 pub const DEFAULT_LAUNCHER_PROCESS_NAMES: &[&str] = &["paradox launcher", "paradox-launcher"];
 
@@ -29,23 +29,35 @@ pub struct ApplyResult {
     pub backup_path: PathBuf,
 }
 
-/// Names of running processes that contain any of `names` (case-insensitive).
+/// Running processes whose name or executable path contains any of `names` (case-insensitive).
+/// Each hit is the process name, or the executable path when only the path matched.
 pub fn launcher_processes(names: &[&str]) -> Vec<String> {
     let needles: Vec<String> = names.iter().map(|n| n.to_lowercase()).collect();
     // Fail closed: if the process list cannot be read, report a blocker rather than none.
     let Ok(mut sys) = System::new() else {
         return vec!["<process list unavailable>".to_string()];
     };
-    sys.refresh_processes(ProcessesToUpdate::All, true);
-    let found: BTreeSet<String> = sys
-        .processes()
-        .values()
-        .map(|p| p.name().to_string_lossy().to_string())
-        .filter(|name| {
-            let lower = name.to_lowercase();
-            needles.iter().any(|n| lower.contains(n.as_str()))
-        })
-        .collect();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet),
+    );
+    let mut found = BTreeSet::new();
+    for process in sys.processes().values() {
+        let name = process.name().to_string_lossy().to_string();
+        let name_lower = name.to_lowercase();
+        // macOS truncates process names, so the full executable path is matched too.
+        let exe = process
+            .exe()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let exe_lower = exe.to_lowercase();
+        if needles.iter().any(|n| name_lower.contains(n.as_str())) {
+            found.insert(name);
+        } else if needles.iter().any(|n| exe_lower.contains(n.as_str())) {
+            found.insert(exe);
+        }
+    }
     found.into_iter().collect()
 }
 

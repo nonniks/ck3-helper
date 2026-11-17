@@ -189,3 +189,23 @@ fn running_launcher_blocks_apply() {
     assert_eq!(playset_count(&fx.db), 1);
     assert_eq!(backups_in(fx.dir.path()), 0);
 }
+
+#[test]
+fn launcher_is_detected_by_executable_path() {
+    let exe = std::env::current_exe().unwrap();
+    let name = exe.file_name().unwrap().to_string_lossy().to_string();
+    // the parent directory appears in the executable path but not in the process name
+    let parent = exe
+        .parent()
+        .unwrap()
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
+    assert!(!name.to_lowercase().contains(&parent.to_lowercase()));
+    let found = ck3h_core::apply::launcher_processes(&[parent.as_str()]);
+    assert!(
+        found.iter().any(|f| f.contains(&name)),
+        "expected the current process in {found:?}"
+    );
+}
