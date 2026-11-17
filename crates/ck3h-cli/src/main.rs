@@ -9,7 +9,7 @@ use ck3h_core::deps::{DepIssueKind, build_dep_graph};
 use ck3h_core::error::CoreError;
 use ck3h_core::index::{ModIndex, index_vanilla};
 use ck3h_core::launcher::{LAUNCHER_DB_FILE, LauncherDb, Playset};
-use ck3h_core::paths::{default_user_dir, game_language};
+use ck3h_core::paths::{default_game_dir, default_user_dir, game_dir_if_valid, game_language};
 use ck3h_core::playset::{ModEntry, load_playset};
 use ck3h_core::sort::{MoveReason, SortProposal, load_rules, propose};
 use clap::{Parser, Subcommand};
@@ -93,20 +93,24 @@ impl From<CoreError> for Failure {
 
 type Outcome = Result<(), Failure>;
 
+fn exit_for(failure: &Failure) -> (u8, String) {
+    match failure {
+        Failure::Core(CoreError::LauncherRunning(names)) => (
+            2,
+            format!("Close the Paradox Launcher first: {}", names.join(", ")),
+        ),
+        Failure::Core(e) => (1, format!("error: {e}")),
+        Failure::Message(m) => (1, format!("error: {m}")),
+    }
+}
+
 fn main() -> ExitCode {
     match run(Cli::parse()) {
         Ok(()) => ExitCode::SUCCESS,
-        Err(Failure::Core(CoreError::LauncherRunning(names))) => {
-            eprintln!("Close the Paradox Launcher first: {}", names.join(", "));
-            ExitCode::from(2)
-        }
-        Err(Failure::Core(e)) => {
-            eprintln!("error: {e}");
-            ExitCode::from(1)
-        }
-        Err(Failure::Message(m)) => {
-            eprintln!("error: {m}");
-            ExitCode::from(1)
+        Err(failure) => {
+            let (code, message) = exit_for(&failure);
+            eprintln!("{message}");
+            ExitCode::from(code)
         }
     }
 }
@@ -420,6 +424,15 @@ fn print_calibration(report: &CalibrationReport, mods: &[ModEntry]) {
             m.database, m.key, m.log_file, m.predicted_file
         );
     }
+    if !report.logged_single_definition.is_empty() {
+        println!(
+            "logged with a single definition here: {}",
+            report.logged_single_definition.values().sum::<usize>()
+        );
+        for (db, n) in &report.logged_single_definition {
+            println!("  {db}: {n}");
+        }
+    }
     if !report.log_unknown.is_empty() {
         println!("unknown by database:");
         for (db, n) in &report.log_unknown {
@@ -444,7 +457,23 @@ fn print_calibration(report: &CalibrationReport, mods: &[ModEntry]) {
 }
 
 fn calibrate_cmd(user_dir: &Path, target: &Target, json: bool) -> Outcome {
-    let l = load(user_dir, target)?;
+    let game = match &target.game {
+        Some(path) => game_dir_if_valid(path).ok_or_else(|| {
+            Failure::Message(format!(
+                "not a CK3 game folder (no common/): {}",
+                path.display()
+            ))
+        })?,
+        None => default_game_dir().ok_or_else(|| {
+            Failure::Message("calibrate needs the game folder: pass --game <path to game/>".into())
+        })?,
+    };
+    let target = Target {
+        playset: target.playset.clone(),
+        lang: target.lang.clone(),
+        game: Some(game),
+    };
+    let l = load(user_dir, &target)?;
     let log_path = user_dir.join("logs").join("database_conflicts.log");
     let bytes = std::fs::read(&log_path)
         .map_err(|e| Failure::Message(format!("{}: {e}", log_path.display())))?;
@@ -461,4 +490,31 @@ fn calibrate_cmd(user_dir: &Path, target: &Target, json: bool) -> Outcome {
     }
     print_calibration(&report, &l.mods);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn launcher_running_exits_2_with_names() {
+        let f = Failure::Core(CoreError::LauncherRunning(vec!["Paradox Launcher".into()]));
+        assert_eq!(
+            exit_for(&f),
+            (
+                2,
+                "Close the Paradox Launcher first: Paradox Launcher".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn other_errors_exit_1() {
+        let f = Failure::Core(CoreError::PlaysetNotFound("Nope".into()));
+        assert_eq!(
+            exit_for(&f),
+            (1, "error: playset not found: Nope".to_string())
+        );
+        assert_eq!(exit_for(&Failure::Message("x".into())).0, 1);
+    }
 }
