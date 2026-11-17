@@ -14,17 +14,19 @@ pub enum NameMatch {
 /// Finds mods (ids, in playset order) by trimmed, case-insensitive name,
 /// or by Steam id with a `steam:<id>` prefix.
 pub fn match_name(mods: &[ModEntry], name: &str) -> NameMatch {
+    match_in(mods.iter(), name)
+}
+
+fn match_in<'a>(mods: impl Iterator<Item = &'a ModEntry>, name: &str) -> NameMatch {
     let name = name.trim();
     let ids: Vec<String> = if let Some(steam) = name.strip_prefix("steam:") {
         let steam = steam.trim();
-        mods.iter()
-            .filter(|m| m.steam_id.as_deref() == Some(steam))
+        mods.filter(|m| m.steam_id.as_deref() == Some(steam))
             .map(|m| m.id.clone())
             .collect()
     } else {
         let wanted = name.to_lowercase();
-        mods.iter()
-            .filter(|m| m.name.trim().to_lowercase() == wanted)
+        mods.filter(|m| m.name.trim().to_lowercase() == wanted)
             .map(|m| m.id.clone())
             .collect()
     };
@@ -58,19 +60,19 @@ pub struct DepGraph {
 }
 
 pub fn build_dep_graph(mods: &[ModEntry]) -> DepGraph {
-    let enabled: Vec<ModEntry> = mods.iter().filter(|m| m.enabled).cloned().collect();
+    let enabled: Vec<&ModEntry> = mods.iter().filter(|m| m.enabled).collect();
     let mut graph = DepGraph {
         edges: BTreeSet::new(),
         issues: Vec::new(),
         compatches: BTreeSet::new(),
     };
-    for m in &enabled {
+    for &m in &enabled {
         let Some(descriptor) = &m.descriptor else {
             continue;
         };
         let mut found = BTreeSet::new();
         for dependency in &descriptor.dependencies {
-            let kind = match match_name(&enabled, dependency) {
+            let kind = match match_in(enabled.iter().copied(), dependency) {
                 NameMatch::One(dep_id) => {
                     if dep_id != m.id {
                         found.insert(dep_id);
