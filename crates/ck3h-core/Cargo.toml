@@ -9,6 +9,10 @@ testkit = ["dep:tempfile"]
 
 [dependencies]
 dirs = "6"
+jomini = "0.37"
 rusqlite = { version = "0.43", features = ["bundled"] }
 tempfile = { version = "3", optional = true }
 thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"

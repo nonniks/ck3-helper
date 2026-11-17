@@ -1,3 +1,4 @@
+pub mod descriptor;
 pub mod error;
 pub mod launcher;
 pub mod paths;
