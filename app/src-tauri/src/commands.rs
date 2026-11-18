@@ -1,6 +1,6 @@
 use crate::dto::{
     AnalysisView, ConflictQuery, ConflictView, IndexWarningView, Page, PlaysetRow, Progress,
-    SetupView,
+    RulesView, SetupView,
 };
 use crate::error::{AppError, ErrorCode};
 use crate::settings::Settings;
@@ -104,4 +104,39 @@ pub async fn mod_warnings(
     mod_id: String,
 ) -> Result<Vec<IndexWarningView>, AppError> {
     state.mod_warnings(&mod_id)
+}
+
+#[tauri::command]
+pub async fn rules(state: State<'_, AppState>) -> Result<RulesView, AppError> {
+    Ok(state.rules())
+}
+
+/// The editing commands recompute the report, so they run on the blocking pool like `analyze`.
+#[tauri::command]
+pub async fn add_rule(
+    app: AppHandle,
+    before: String,
+    after: String,
+    note: Option<String>,
+) -> Result<RulesView, AppError> {
+    blocking(move || app.state::<AppState>().add_rule(before, after, note)).await
+}
+
+#[tauri::command]
+pub async fn mark_intended(
+    app: AppHandle,
+    winner_id: String,
+    loser_id: String,
+    note: String,
+) -> Result<RulesView, AppError> {
+    blocking(move || {
+        app.state::<AppState>()
+            .mark_intended(&winner_id, &loser_id, note)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn remove_rule(app: AppHandle, index: usize) -> Result<RulesView, AppError> {
+    blocking(move || app.state::<AppState>().remove_rule(index)).await
 }

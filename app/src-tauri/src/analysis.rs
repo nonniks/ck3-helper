@@ -13,7 +13,7 @@ use ck3h_core::deps::{DepClosure, DepGraph, DepIssueKind, build_dep_graph};
 use ck3h_core::index::ModIndex;
 use ck3h_core::playset::ModEntry;
 use ck3h_core::session::Loaded;
-use ck3h_core::sort::{Rule, intent_graph};
+use ck3h_core::sort::{Rule, intent_graph, resolve_rules};
 use std::path::PathBuf;
 
 /// An analysed playset. Rules and the vanilla toggle change `intent`, `report` and `pairs`
@@ -47,9 +47,7 @@ impl Analysis {
         vanilla: Option<&ModIndex>,
     ) -> Self {
         let deps = build_dep_graph(&loaded.mods);
-        let intent = intent_graph(&deps, &loaded.mods, &rules);
-        let report = analyze(&loaded.mods, &intent, vanilla);
-        let pairs = pairs(&report, &intent);
+        let (intent, report, pairs) = derive(&loaded, &deps, &rules, vanilla);
         Self {
             loaded,
             deps,
@@ -62,13 +60,37 @@ impl Analysis {
         }
     }
 
-    /// Recomputes the report and pairs with `vanilla`, or without vanilla for `None`.
-    pub fn set_vanilla(&mut self, vanilla: Option<&ModIndex>) {
-        let report = analyze(&self.loaded.mods, &self.intent, vanilla);
-        let pairs = pairs(&report, &self.intent);
-        self.report = report;
-        self.pairs = pairs;
+    /// Recomputes `intent`, the report and the pairs from the current rules, with `vanilla` or
+    /// without it for `None`. Mods are not re-indexed.
+    fn refresh(&mut self, vanilla: Option<&ModIndex>) {
+        (self.intent, self.report, self.pairs) =
+            derive(&self.loaded, &self.deps, &self.rules, vanilla);
         self.vanilla_on = vanilla.is_some();
+    }
+
+    pub fn set_vanilla(&mut self, vanilla: Option<&ModIndex>) {
+        self.refresh(vanilla);
+    }
+
+    /// New rules (or the error that left none) from `rules.toml`; `vanilla` as in `set_vanilla`.
+    pub fn set_rules(
+        &mut self,
+        rules: Vec<Rule>,
+        rules_error: Option<String>,
+        vanilla: Option<&ModIndex>,
+    ) {
+        self.rules = rules;
+        self.rules_error = rules_error;
+        self.refresh(vanilla);
+    }
+
+    /// Indices of `rules` that apply to this playset.
+    pub fn applied_rules(&self, rules: &[Rule]) -> Vec<usize> {
+        resolve_rules(&self.loaded.mods, rules)
+            .0
+            .into_iter()
+            .map(|(_, _, i)| i)
+            .collect()
     }
 
     pub fn view(&self) -> AnalysisView {
@@ -160,7 +182,7 @@ impl Analysis {
             .unwrap_or_default()
     }
 
-    fn find(&self, mod_id: &str) -> Option<&ModEntry> {
+    pub fn find(&self, mod_id: &str) -> Option<&ModEntry> {
         self.loaded.mods.iter().find(|m| m.id == mod_id)
     }
 
@@ -253,6 +275,18 @@ impl Analysis {
                 .map(str::to_string),
         }
     }
+}
+
+fn derive(
+    loaded: &Loaded,
+    deps: &DepGraph,
+    rules: &[Rule],
+    vanilla: Option<&ModIndex>,
+) -> (DepGraph, ConflictReport, Vec<PairSummary>) {
+    let intent = intent_graph(deps, &loaded.mods, rules);
+    let report = analyze(&loaded.mods, &intent, vanilla);
+    let pairs = pairs(&report, &intent);
+    (intent, report, pairs)
 }
 
 /// `text_lower` is `query.text` in lowercase.

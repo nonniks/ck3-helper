@@ -1,17 +1,19 @@
 use crate::analysis::{Analysis, VanillaIndex, matches};
 use crate::dto::{
     AnalysisView, ConflictQuery, ConflictView, IndexWarningView, Page, PlaysetRow, Progress,
-    SetupView,
+    RuleView, RulesView, SetupView,
 };
 use crate::error::{AppError, ErrorCode};
+use crate::rules_file::{append_rule, remove_rule};
 use crate::settings::{Settings, SettingsFile, load_settings, save_settings};
 use ck3h_core::conflicts::{Source, involves};
+use ck3h_core::error::CoreError;
 use ck3h_core::index::ModIndex;
 use ck3h_core::launcher::LAUNCHER_DB_FILE;
 use ck3h_core::paths::{RULES_FILE, default_game_dir, default_user_dir, game_language};
 use ck3h_core::session::{PlaysetSelector, analysis_lang, launcher_db, load, load_vanilla};
-use ck3h_core::sort::load_rules;
-use std::path::PathBuf;
+use ck3h_core::sort::{Rule, load_rules};
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
 /// Lock order: `settings`, `settings_error`, `analysis`, `vanilla`. A thread holding one of them
@@ -224,6 +226,98 @@ impl AppState {
         self.with_analysis(|a, _| a.mod_warnings(mod_id))
     }
 
+    fn rules_path(&self) -> PathBuf {
+        self.config_dir.join(RULES_FILE)
+    }
+
+    /// The rules in `rules.toml` as they are now; `applied` is judged on the current analysis.
+    pub fn rules(&self) -> RulesView {
+        rules_view(&self.rules_path(), lock(&self.analysis).as_ref())
+    }
+
+    pub fn add_rule(
+        &self,
+        before: String,
+        after: String,
+        note: Option<String>,
+    ) -> Result<RulesView, AppError> {
+        self.edit_rules(|_, path| {
+            append_rule(
+                path,
+                &Rule {
+                    before,
+                    after,
+                    note,
+                },
+            )
+        })
+    }
+
+    /// Adds the rule "loser before winner", which makes the pair intended. Both ids must be mods
+    /// of the current analysis, and the loser must not already depend on the winner.
+    pub fn mark_intended(
+        &self,
+        winner_id: &str,
+        loser_id: &str,
+        note: String,
+    ) -> Result<RulesView, AppError> {
+        self.edit_rules(|analysis, path| {
+            let a = analysis.ok_or_else(not_analyzed)?;
+            let find = |id: &str| {
+                a.find(id).ok_or_else(|| AppError {
+                    code: ErrorCode::Rules,
+                    items: vec![id.to_string()],
+                    detail: format!("no mod {id} in the analysis"),
+                })
+            };
+            let (winner, loser) = (find(winner_id)?, find(loser_id)?);
+            if a.intent.closure().depends_on(&loser.id, &winner.id) {
+                return Err(CoreError::Cycle(vec![loser.name.clone(), winner.name.clone()]).into());
+            }
+            let reference = |m: &ck3h_core::playset::ModEntry| {
+                m.steam_id
+                    .as_ref()
+                    .map_or_else(|| m.name.clone(), |id| format!("steam:{id}"))
+            };
+            append_rule(
+                path,
+                &Rule {
+                    before: reference(loser),
+                    after: reference(winner),
+                    note: Some(note),
+                },
+            )
+        })
+    }
+
+    pub fn remove_rule(&self, index: usize) -> Result<RulesView, AppError> {
+        self.edit_rules(|_, path| remove_rule(path, index))
+    }
+
+    /// Runs the file edit `edit` under the analysis lock (edits do not interleave), then gives the
+    /// current analysis the new rules without re-indexing mods.
+    fn edit_rules(
+        &self,
+        edit: impl FnOnce(Option<&Analysis>, &Path) -> Result<(), AppError>,
+    ) -> Result<RulesView, AppError> {
+        let path = self.rules_path();
+        let mut analysis = lock(&self.analysis);
+        edit(analysis.as_ref(), &path)?;
+        if let Some(a) = analysis.as_mut() {
+            let (rules, error) = match load_rules(&path) {
+                Ok(rules) => (rules, None),
+                Err(e) => (Vec::new(), Some(e.to_string())),
+            };
+            if a.vanilla_on {
+                let vanilla = lock(&self.vanilla);
+                a.set_rules(rules, error, vanilla.as_ref().map(|v| &v.index));
+            } else {
+                a.set_rules(rules, error, None);
+            }
+        }
+        Ok(rules_view(&path, analysis.as_ref()))
+    }
+
     /// Runs `f` on the current analysis and, when it includes vanilla, the vanilla index.
     fn with_analysis<T>(
         &self,
@@ -264,5 +358,30 @@ impl AppState {
             index,
         });
         Ok(())
+    }
+}
+
+fn rules_view(path: &Path, analysis: Option<&Analysis>) -> RulesView {
+    let (rules, error) = match load_rules(path) {
+        Ok(rules) => (rules, None),
+        Err(e) => (Vec::new(), Some(e.to_string())),
+    };
+    let applied = analysis
+        .map(|a| a.applied_rules(&rules))
+        .unwrap_or_default();
+    RulesView {
+        path: path.display().to_string(),
+        error,
+        rules: rules
+            .into_iter()
+            .enumerate()
+            .map(|(index, r)| RuleView {
+                index,
+                before: r.before,
+                after: r.after,
+                note: r.note,
+                applied: applied.contains(&index),
+            })
+            .collect(),
     }
 }

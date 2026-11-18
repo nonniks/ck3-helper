@@ -245,3 +245,26 @@ pub struct IndexWarningView {
     pub file: String,
     pub message: String,
 }
+
+/// A rule of `rules.toml`; `index` is its position in the file. `applied`: it orders two enabled
+/// mods of the current analysis.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct RuleView {
+    pub index: usize,
+    pub before: String,
+    pub after: String,
+    pub note: Option<String>,
+    pub applied: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct RulesView {
+    pub path: String,
+    /// `rules.toml` does not parse; `rules` is empty then.
+    pub error: Option<String>,
+    pub rules: Vec<RuleView>,
+}
