@@ -18,6 +18,7 @@ export const queryKeys = {
   search: (query: unknown) => ['search', query] as const,
   rules: ['rules'] as const,
   proposal: ['proposal'] as const,
+  applied: ['applied'] as const,
   launcher: ['launcher'] as const,
   calibration: ['calibration'] as const,
 };
@@ -31,6 +32,7 @@ export function useAnalyze() {
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.summary, data);
       queryClient.setQueryData(queryKeys.analysisError, null);
+      queryClient.setQueryData(queryKeys.applied, null);
       for (const key of ['pair', 'search', 'rules', 'proposal', 'calibration']) {
         queryClient.removeQueries({ queryKey: [key] });
       }

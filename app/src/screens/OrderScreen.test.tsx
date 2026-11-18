@@ -84,9 +84,11 @@ function renderScreen() {
       </MantineProvider>
     </QueryClientProvider>,
   );
+  return client;
 }
 
 const saveButton = () => screen.findByRole('button', { name: ru.apply.save });
+const doneTitle = ru.apply.doneTitle.replace('{{name}}', 'Main (CK3 Helper)');
 
 test('running launcher disables saving and names the process', async () => {
   handlers.launcher_status = () => ({ state: 'running', processes: ['Paradox Launcher'] });
@@ -160,6 +162,74 @@ test('changed playset offers to recalculate', async () => {
   await waitFor(() =>
     expect(invoked('analyze')).toEqual(expect.objectContaining({ playsetId: 'main-id' })),
   );
+});
+
+test('after a successful apply the screen shows the new playset and offers no second save', async () => {
+  let proposals = 0;
+  handlers.propose = () => {
+    proposals++;
+    return proposal;
+  };
+  const user = userEvent.setup();
+  renderScreen();
+  await user.click(await saveButton());
+  await user.click(await screen.findByRole('button', { name: ru.apply.confirm }));
+  const dialog = await screen.findByRole('dialog');
+  expect(await within(dialog).findByText(doneTitle)).toBeInTheDocument();
+  await user.click(within(dialog).getAllByRole('button', { name: ru.apply.close }).at(-1)!);
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(screen.getByText(doneTitle)).toBeInTheDocument();
+  expect(screen.getByText(ru.apply.pickInLauncher)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: ru.apply.save })).toBeNull();
+  expect(screen.queryByRole('table')).toBeNull();
+  expect(proposals).toBe(1);
+});
+
+test('a failing proposal refetch keeps the apply dialog and shows the error', async () => {
+  const user = userEvent.setup();
+  const client = renderScreen();
+  await user.click(await saveButton());
+  expect(await screen.findByText('Main (CK3 Helper)')).toBeInTheDocument();
+  handlers.propose = () => Promise.reject({ code: 'io', items: [], detail: 'proposal gone' });
+  await client.invalidateQueries({ queryKey: queryKeys.proposal });
+  expect(await screen.findByText('proposal gone')).toBeInTheDocument();
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: ru.apply.confirm }));
+  expect(await screen.findByRole('button', { name: ru.apply.revealBackup })).toBeInTheDocument();
+});
+
+test('the apply dialog cannot be closed while saving', async () => {
+  let finish: (result: unknown) => void = () => {};
+  handlers.apply = () => new Promise((resolve) => (finish = resolve));
+  const user = userEvent.setup();
+  renderScreen();
+  await user.click(await saveButton());
+  await user.click(await screen.findByRole('button', { name: ru.apply.confirm }));
+  const dialog = screen.getByRole('dialog');
+  await waitFor(() =>
+    expect(within(dialog).getByRole('button', { name: ru.apply.cancel })).toBeDisabled(),
+  );
+  expect(within(dialog).queryByRole('button', { name: ru.common.close })).toBeNull();
+  await user.keyboard('{Escape}');
+  finish({ newPlaysetName: 'Main (CK3 Helper)', backupPath: '/db/dir/backup.sqlite' });
+  expect(await screen.findByRole('button', { name: ru.apply.revealBackup })).toBeInTheDocument();
+});
+
+test('a failed recalculation does not come back when the dialog is reopened', async () => {
+  handlers.apply = () => Promise.reject({ code: 'playsetChanged', items: [], detail: '' });
+  handlers.analyze = () => Promise.reject({ code: 'io', items: [], detail: 'disk full' });
+  const user = userEvent.setup();
+  renderScreen();
+  await user.click(await saveButton());
+  await user.click(await screen.findByRole('button', { name: ru.apply.confirm }));
+  await user.click(await screen.findByRole('button', { name: ru.apply.recalculate }));
+  expect(await screen.findByText('disk full')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: ru.apply.cancel }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await user.click(await saveButton());
+  await user.click(await screen.findByRole('button', { name: ru.apply.confirm }));
+  expect(await screen.findByRole('button', { name: ru.apply.recalculate })).toBeInTheDocument();
+  expect(screen.queryByText('disk full')).toBeNull();
 });
 
 test('a failed recalculation is shown inside the dialog with its detail', async () => {

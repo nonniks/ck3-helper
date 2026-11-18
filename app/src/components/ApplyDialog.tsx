@@ -28,20 +28,27 @@ export function ApplyDialog({
   const analyze = useAnalyze();
   const save = useMutation({
     mutationFn: apply,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.proposal }),
+    // Rust spends its proposal on success; the screen shows the result until the next analysis.
+    onSuccess: (result) => queryClient.setQueryData(queryKeys.applied, result),
   });
   const close = () => {
     save.reset();
+    analyze.reset();
     onClose();
   };
   const changed = isAppError(save.error) && save.error.code === 'playsetChanged';
   const done = save.data;
+  // The copy and the backup are written even if the dialog goes away, so it stays until done.
+  const saving = save.isPending;
 
   return (
     <Modal
       opened={opened}
       onClose={close}
       title={t('apply.dialogTitle')}
+      closeOnEscape={!saving}
+      closeOnClickOutside={!saving}
+      withCloseButton={!saving}
       closeButtonProps={{ 'aria-label': t('common.close') }}
     >
       {done ? (
@@ -82,7 +89,7 @@ export function ApplyDialog({
           {save.isError && <ErrorAlert error={save.error} />}
           {changed && analyze.isError && <ErrorAlert error={analyze.error} />}
           <Group justify="flex-end">
-            <Button variant="default" onClick={close}>
+            <Button variant="default" onClick={close} disabled={saving}>
               {t('apply.cancel')}
             </Button>
             {changed ? (

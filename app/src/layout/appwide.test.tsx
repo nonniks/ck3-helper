@@ -171,6 +171,48 @@ test('a failing plugin call is reported to the user', async () => {
   expect(await screen.findByText(/no browser/)).toBeInTheDocument();
 });
 
+test('a saved order is shown on «Порядок» until the next analysis', async () => {
+  const name = 'Мой плейсет (CK3 Helper)';
+  mockIPC((cmd) => {
+    if (cmd === 'get_setup') return setup;
+    if (cmd === 'list_playsets') return [];
+    if (cmd === 'analyze') return analysis;
+    if (cmd === 'propose')
+      return {
+        rows: [
+          { id: 'b', name: 'B', enabled: true, from: 1, to: 0, moved: true },
+          { id: 'a', name: 'A', enabled: true, from: 0, to: 1, moved: true },
+        ],
+        moves: [],
+        winnerChanges: [],
+        unresolvedRules: [],
+        alreadySorted: false,
+      };
+    if (cmd === 'launcher_status') return { state: 'notRunning' };
+    if (cmd === 'apply_preview') return { newPlaysetName: name, backupDir: '/db' };
+    if (cmd === 'apply') return { newPlaysetName: name, backupPath: '/db/backup.sqlite' };
+    return null;
+  });
+  const user = userEvent.setup();
+  render(<App />);
+  const refresh = await screen.findByRole('button', { name: ru.header.refresh });
+  await waitFor(() => expect(refresh).toBeEnabled());
+  await user.click(screen.getByRole('link', { name: 'Порядок' }));
+  const save = await screen.findByRole('button', { name: ru.apply.save });
+  await waitFor(() => expect(save).toBeEnabled());
+  await user.click(save);
+  await user.click(await screen.findByRole('button', { name: ru.apply.confirm }));
+  await screen.findByRole('button', { name: ru.apply.revealBackup });
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(screen.getByText(ru.apply.pickInLauncher)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: ru.apply.save })).toBeNull();
+
+  await user.click(refresh);
+  expect(await screen.findByRole('button', { name: ru.apply.save })).toBeInTheDocument();
+  expect(screen.queryByText(ru.apply.pickInLauncher)).toBeNull();
+});
+
 test('document language follows the UI language', async () => {
   await initI18n('en');
   expect(document.documentElement.lang).toBe('en');

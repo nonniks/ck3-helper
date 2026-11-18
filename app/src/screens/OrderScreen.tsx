@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AnalysisView } from '../api/bindings/AnalysisView';
+import type { ApplyView } from '../api/bindings/ApplyView';
 import type { ProposalView } from '../api/bindings/ProposalView';
 import { launcherStatus, propose } from '../api/client';
 import { queryKeys, useAnalysisRunning } from '../api/queries';
@@ -56,7 +57,18 @@ export function OrderScreen() {
     queryFn: () => Promise.reject(new Error('summary is filled by analyze')),
     enabled: false,
   });
-  const proposal = useQuery({ queryKey: queryKeys.proposal, queryFn: propose, retry: false });
+  const applied = useQuery<ApplyView | null>({
+    queryKey: queryKeys.applied,
+    queryFn: () => null,
+    enabled: false,
+  }).data;
+  // After a save the same proposal must not be offered again (Rust spent it).
+  const proposal = useQuery({
+    queryKey: queryKeys.proposal,
+    queryFn: propose,
+    retry: false,
+    enabled: !applied,
+  });
   const launcher = useQuery({
     queryKey: queryKeys.launcher,
     queryFn: launcherStatus,
@@ -64,66 +76,69 @@ export function OrderScreen() {
     retry: false,
   });
 
-  const title = <Title order={2}>{t('screens.order')}</Title>;
-  if (proposal.isPending)
-    return (
-      <Stack>
-        {title}
-        <Loader size="sm" />
-      </Stack>
-    );
-  if (proposal.isError) {
-    const cycle =
-      typeof proposal.error === 'object' &&
-      proposal.error !== null &&
-      (proposal.error as { code?: string }).code === 'cycle';
-    return (
-      <Stack>
-        {title}
+  const body = () => {
+    if (applied)
+      return (
+        <Stack gap="xs">
+          <Text fw={600}>{t('apply.doneTitle', { name: applied.newPlaysetName })}</Text>
+          <Text size="sm">{t('apply.pickInLauncher')}</Text>
+        </Stack>
+      );
+    if (proposal.isPending) return <Loader size="sm" />;
+    if (proposal.isError) {
+      const cycle =
+        typeof proposal.error === 'object' &&
+        proposal.error !== null &&
+        (proposal.error as { code?: string }).code === 'cycle';
+      return (
         <ErrorAlert error={proposal.error} color={cycle ? 'yellow' : 'red'}>
           {cycle && <Text size="sm">{t('order.cycleHint')}</Text>}
         </ErrorAlert>
-      </Stack>
-    );
-  }
+      );
+    }
 
-  const data = proposal.data;
-  const status = launcher.data;
-  let blocked: string | null = null;
-  if (!status) blocked = '';
-  else if (status.state === 'running')
-    blocked = t('errors.launcherRunning', { items: status.processes.join(', ') });
-  else if (status.state === 'unknown') blocked = t('apply.processListUnavailable');
-
-  return (
-    <Stack>
-      {title}
-      {data.alreadySorted ? (
+    const data = proposal.data;
+    if (data.alreadySorted)
+      return (
         <>
           <Text>{t('order.alreadySorted')}</Text>
           <Details proposal={data} />
         </>
-      ) : (
-        <>
-          <OrderTable rows={data.rows} moves={data.moves} />
-          <Details proposal={data} />
-          <Stack gap="xs" align="flex-start">
-            <Button disabled={blocked !== null || analysisRunning} onClick={() => setDialog(true)}>
-              {t('apply.save')}
-            </Button>
-            {blocked && (
-              <Text size="sm" c="red">
-                {blocked}
-              </Text>
-            )}
-          </Stack>
-          <ApplyDialog
-            opened={dialog}
-            onClose={() => setDialog(false)}
-            playsetId={summary.data?.playset.id ?? null}
-          />
-        </>
-      )}
+      );
+    const status = launcher.data;
+    let blocked: string | null = null;
+    if (!status) blocked = '';
+    else if (status.state === 'running')
+      blocked = t('errors.launcherRunning', { items: status.processes.join(', ') });
+    else if (status.state === 'unknown') blocked = t('apply.processListUnavailable');
+    return (
+      <>
+        <OrderTable rows={data.rows} moves={data.moves} />
+        <Details proposal={data} />
+        <Stack gap="xs" align="flex-start">
+          <Button disabled={blocked !== null || analysisRunning} onClick={() => setDialog(true)}>
+            {t('apply.save')}
+          </Button>
+          {blocked && (
+            <Text size="sm" c="red">
+              {blocked}
+            </Text>
+          )}
+        </Stack>
+      </>
+    );
+  };
+
+  return (
+    <Stack>
+      <Title order={2}>{t('screens.order')}</Title>
+      {body()}
+      {/* Outside the proposal states: a refetch must not take the result of a save with it. */}
+      <ApplyDialog
+        opened={dialog}
+        onClose={() => setDialog(false)}
+        playsetId={summary.data?.playset.id ?? null}
+      />
     </Stack>
   );
 }
