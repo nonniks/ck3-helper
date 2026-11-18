@@ -69,13 +69,15 @@ pub fn load_settings(dir: &Path) -> SettingsFile {
     }
 }
 
-/// An existing file that does not parse is kept as `settings.toml.bak` before being replaced.
+/// An existing file that cannot be read, is not UTF-8 or does not parse is kept as `settings.toml.bak` before being replaced.
 pub fn save_settings(dir: &Path, s: &Settings) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
     let path = dir.join(SETTINGS_FILE);
-    if let Ok(old) = std::fs::read_to_string(&path)
-        && toml::from_str::<Settings>(&old).is_err()
-    {
+    let usable = match std::fs::read_to_string(&path) {
+        Ok(old) => toml::from_str::<Settings>(&old).is_ok(),
+        Err(e) => e.kind() == std::io::ErrorKind::NotFound,
+    };
+    if !usable {
         std::fs::rename(&path, dir.join("settings.toml.bak"))?;
     }
     let text = toml::to_string_pretty(s).map_err(std::io::Error::other)?;

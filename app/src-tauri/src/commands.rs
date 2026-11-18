@@ -7,26 +7,7 @@ use crate::error::{AppError, ErrorCode};
 use crate::settings::Settings;
 use crate::state::AppState;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Manager, State};
-
-#[tauri::command]
-pub fn get_setup(state: State<'_, AppState>) -> SetupView {
-    state.setup()
-}
-
-#[tauri::command]
-pub fn save_settings(
-    state: State<'_, AppState>,
-    settings: Settings,
-) -> Result<SetupView, AppError> {
-    state.save_settings(settings)
-}
-
-/// `async` so Tauri runs it on its worker pool, not the main thread; the SQLite read is brief.
-#[tauri::command]
-pub async fn list_playsets(state: State<'_, AppState>) -> Result<Vec<PlaysetRow>, AppError> {
-    state.list_playsets()
-}
+use tauri::{AppHandle, Manager};
 
 /// Runs `f` on the blocking pool; `State<'_>` is not `'static`, so `f` takes the state from
 /// its own `AppHandle`.
@@ -40,6 +21,21 @@ async fn blocking<T: Send + 'static>(
             items: Vec::new(),
             detail: e.to_string(),
         })?
+}
+
+#[tauri::command]
+pub async fn get_setup(app: AppHandle) -> Result<SetupView, AppError> {
+    blocking(move || Ok(app.state::<AppState>().setup())).await
+}
+
+#[tauri::command]
+pub async fn save_settings(app: AppHandle, settings: Settings) -> Result<SetupView, AppError> {
+    blocking(move || app.state::<AppState>().save_settings(settings)).await
+}
+
+#[tauri::command]
+pub async fn list_playsets(app: AppHandle) -> Result<Vec<PlaysetRow>, AppError> {
+    blocking(move || app.state::<AppState>().list_playsets()).await
 }
 
 #[tauri::command]
@@ -72,44 +68,56 @@ pub async fn set_vanilla(
     .await
 }
 
-/// The light commands are `async` too: off the main thread, they may wait for a running analysis.
+/// The light commands run on the blocking pool too: they may wait for a running analysis.
 #[tauri::command]
-pub async fn summary(state: State<'_, AppState>) -> Result<AnalysisView, AppError> {
-    state.summary()
+pub async fn summary(app: AppHandle) -> Result<AnalysisView, AppError> {
+    blocking(move || app.state::<AppState>().summary()).await
 }
 
 #[tauri::command]
 pub async fn pair_conflicts(
-    state: State<'_, AppState>,
+    app: AppHandle,
     winner_id: Option<String>,
     loser_id: Option<String>,
     offset: usize,
     limit: usize,
 ) -> Result<Page<ConflictView>, AppError> {
-    state.pair_conflicts(winner_id.as_deref(), loser_id.as_deref(), offset, limit)
+    blocking(move || {
+        app.state::<AppState>().pair_conflicts(
+            winner_id.as_deref(),
+            loser_id.as_deref(),
+            offset,
+            limit,
+        )
+    })
+    .await
 }
 
 #[tauri::command]
 pub async fn search_conflicts(
-    state: State<'_, AppState>,
+    app: AppHandle,
     query: ConflictQuery,
     offset: usize,
     limit: usize,
 ) -> Result<Page<ConflictView>, AppError> {
-    state.search_conflicts(&query, offset, limit)
+    blocking(move || {
+        app.state::<AppState>()
+            .search_conflicts(&query, offset, limit)
+    })
+    .await
 }
 
 #[tauri::command]
 pub async fn mod_warnings(
-    state: State<'_, AppState>,
+    app: AppHandle,
     mod_id: String,
 ) -> Result<Vec<IndexWarningView>, AppError> {
-    state.mod_warnings(&mod_id)
+    blocking(move || app.state::<AppState>().mod_warnings(&mod_id)).await
 }
 
 #[tauri::command]
-pub async fn rules(state: State<'_, AppState>) -> Result<RulesView, AppError> {
-    Ok(state.rules())
+pub async fn rules(app: AppHandle) -> Result<RulesView, AppError> {
+    blocking(move || Ok(app.state::<AppState>().rules())).await
 }
 
 /// The editing commands recompute the report, so they run on the blocking pool like `analyze`.
@@ -154,8 +162,8 @@ pub async fn launcher_status(app: AppHandle) -> Result<LauncherStatus, AppError>
 }
 
 #[tauri::command]
-pub async fn apply_preview(state: State<'_, AppState>) -> Result<ApplyPreviewView, AppError> {
-    state.apply_preview()
+pub async fn apply_preview(app: AppHandle) -> Result<ApplyPreviewView, AppError> {
+    blocking(move || app.state::<AppState>().apply_preview()).await
 }
 
 /// The only command that writes the launcher database.

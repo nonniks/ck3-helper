@@ -122,3 +122,17 @@ fn setup_reports_db_and_effective_dirs() {
     assert_eq!(s.user_dir.as_deref(), Some(ud.to_str().unwrap()));
     assert_eq!(s.game_language.as_deref(), Some("l_english"));
 }
+
+#[test]
+fn non_utf8_settings_use_defaults_and_keep_original_bytes_as_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let dir = dir.path();
+    let bytes = [0xC0, 0xFF, b'='];
+    std::fs::write(dir.join("settings.toml"), bytes).unwrap();
+    let f = load_settings(dir);
+    assert!(f.error.is_some());
+    assert_eq!(f.settings, Settings::default());
+    save_settings(dir, &Settings::default()).unwrap();
+    assert_eq!(std::fs::read(dir.join("settings.toml.bak")).unwrap(), bytes);
+    assert_eq!(load_settings(dir).error, None);
+}
