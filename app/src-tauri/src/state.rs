@@ -62,6 +62,11 @@ impl AppState {
             .clone()
     }
 
+    /// Why `settings.toml` could not be read; `None` once it is read or saved.
+    pub fn settings_error(&self) -> Option<String> {
+        lock(&self.settings_error).clone()
+    }
+
     /// The configured user folder, else the platform default.
     pub fn user_dir(&self) -> Result<PathBuf, AppError> {
         self.settings()
@@ -83,11 +88,7 @@ impl AppState {
             game_dir: game_dir.map(|p| p.display().to_string()),
             default_user_dir: default_user_dir().map(|p| p.display().to_string()),
             default_game_dir: default_game_dir().map(|p| p.display().to_string()),
-            settings_error: self
-                .settings_error
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone(),
+            settings_error: self.settings_error(),
             settings,
             app_version: env!("CARGO_PKG_VERSION").to_string(),
         }

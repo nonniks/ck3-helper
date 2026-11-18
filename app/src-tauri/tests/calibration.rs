@@ -102,12 +102,13 @@ fn check_update_leaves_broken_settings_alone() {
     let file = config.path().join("settings.toml");
     std::fs::write(&file, "this is = = not toml").unwrap();
     let state = AppState::new(config.path().to_path_buf());
-    assert!(state.setup().settings_error.is_some());
+    // Not `setup()`: with broken settings it falls back to the real default CK3 folders.
+    assert!(state.settings_error().is_some());
     assert_eq!(state.check_update_with(REPO, 1_000_000), None);
     assert_eq!(
         std::fs::read_to_string(&file).unwrap(),
         "this is = = not toml"
     );
     assert!(!config.path().join("settings.toml.bak").exists());
-    assert!(state.setup().settings_error.is_some());
+    assert!(state.settings_error().is_some());
 }
