@@ -29,7 +29,7 @@ on Windows and macOS, `~/.local/share/Paradox Interactive/Crusader Kings III` on
 
 ```bash
 ck3h playsets                              # list playsets, * marks the active one
-ck3h conflicts [--lang l_russian] [--game <path to game/>]
+ck3h conflicts [--lang l_russian] [--game <path to game/>] [--rules rules.toml]
 ck3h sort [--rules rules.toml]             # propose a load order, writes nothing
 ck3h sort --apply                          # save it as a new playset "<name> (CK3 Helper)"
 ck3h calibrate [--game <path to game/>]    # compare with logs/database_conflicts.log
@@ -45,10 +45,13 @@ ck3h calibrate [--game <path to game/>]    # compare with logs/database_conflict
   Exit code 1 is any other error, message on stderr.
 - Files that cannot be read or parsed are reported as `warning: <mod>: <file>: <message>`;
   the analysis continues without them.
+- With `--json`, `conflicts`, `sort` and `calibrate` also print `mods` (every mod of the playset:
+  `id`, `name`, `position` counted from 0) and `warnings` (`mod`, `file`, `message`; `mod` is the
+  mod name or `"vanilla"`), the same warnings the text output prints.
 
 ### rules.toml
 
-Pin mods against each other for `sort`. `before` and `after` are a mod name from its
+Pin mods against each other for `sort`. A rule "A before B" also means "B intentionally overrides A": `conflicts` marks the conflicts where B beats A as intended. `before` and `after` are a mod name from its
 `descriptor.mod` or `steam:<workshop id>`; `note` is optional. Unknown keys are an error.
 
 ```toml
@@ -58,7 +61,7 @@ after = "steam:3816257844"
 note = "compatch loads after the base"
 ```
 
-`--rules <file>` must exist. Without it, `<config dir>/ck3-helper/rules.toml` is used if present
+`--rules <file>` (`sort` and `conflicts`) must exist. Without it, `<config dir>/ck3-helper/rules.toml` is used if present
 (`~/Library/Application Support` on macOS, `~/.config` on Linux, `%APPDATA%` on Windows).
 
 ## Credits

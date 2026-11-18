@@ -14,7 +14,7 @@ use ck3h_core::playset::ModEntry;
 use ck3h_core::session::{
     PlaysetSelector, analysis_lang, launcher_db, load_vanilla, read_conflicts_log,
 };
-use ck3h_core::sort::{MoveReason, SortProposal, load_rules, propose};
+use ck3h_core::sort::{MoveReason, Rule, SortProposal, intent_graph, load_rules, propose};
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -49,6 +49,11 @@ enum Command {
     Conflicts {
         #[command(flatten)]
         target: Target,
+        /// Rules file; a rule "A before B" also marks conflicts where B beats A as intended
+        /// (default: <config dir>/ck3-helper/rules.toml, which may be absent; an explicit path
+        /// must exist).
+        #[arg(long)]
+        rules: Option<PathBuf>,
         /// Print JSON instead of text.
         #[arg(long)]
         json: bool,
@@ -166,7 +171,11 @@ fn run(cli: Cli) -> Outcome {
     let out = &mut out;
     match cli.command {
         Command::Playsets { json } => playsets(out, &user_dir, json),
-        Command::Conflicts { target, json } => conflicts(out, &user_dir, &target, json),
+        Command::Conflicts {
+            target,
+            rules,
+            json,
+        } => conflicts(out, &user_dir, &target, rules, json),
         Command::Sort {
             target,
             rules,
@@ -335,11 +344,120 @@ fn print_conflicts(
     Ok(())
 }
 
-fn conflicts(out: &mut impl Write, user_dir: &Path, target: &Target, json: bool) -> Outcome {
+/// An explicit path must exist; the default location may be absent (`load_rules` then means
+/// "no rules").
+fn rules_for(explicit: Option<PathBuf>) -> Result<Vec<Rule>, Failure> {
+    Ok(match explicit {
+        Some(path) if !path.is_file() => {
+            return Err(Failure::Message(format!(
+                "rules file not found: {}",
+                path.display()
+            )));
+        }
+        Some(path) => load_rules(&path)?,
+        None => match config_dir() {
+            Some(d) => load_rules(&d.join(RULES_FILE))?,
+            None => Vec::new(),
+        },
+    })
+}
+
+#[derive(Serialize)]
+struct ModRow<'a> {
+    id: &'a str,
+    name: &'a str,
+    position: i64,
+}
+
+#[derive(Serialize)]
+struct WarningRow<'a> {
+    #[serde(rename = "mod")]
+    mod_name: &'a str,
+    file: &'a str,
+    message: &'a str,
+}
+
+fn mod_rows(l: &Loaded) -> Vec<ModRow<'_>> {
+    l.mods
+        .iter()
+        .map(|m| ModRow {
+            id: &m.id,
+            name: &m.name,
+            position: m.position,
+        })
+        .collect()
+}
+
+/// Index warnings of every mod in playset order, then vanilla's (spec §5).
+fn warning_rows(l: &Loaded) -> Vec<WarningRow<'_>> {
+    let mut sources: Vec<(&str, &ModIndex)> = l
+        .mods
+        .iter()
+        .filter_map(|m| Some((m.name.as_str(), m.index.as_ref()?)))
+        .collect();
+    if let Some(v) = &l.vanilla {
+        sources.push(("vanilla", v));
+    }
+    sources
+        .into_iter()
+        .flat_map(|(name, index)| {
+            index.warnings.iter().map(move |w| WarningRow {
+                mod_name: name,
+                file: &w.file,
+                message: &w.message,
+            })
+        })
+        .collect()
+}
+
+/// `ConflictReport` fields in their own order; `warnings` is replaced by the named shape.
+#[derive(Serialize)]
+struct ConflictsOutput<'a> {
+    mods: Vec<ModRow<'a>>,
+    conflicts: &'a [ck3h_core::conflicts::Conflict],
+    missing_mods: &'a [String],
+    dep_issues: &'a [ck3h_core::deps::DepIssue],
+    compatches: &'a [String],
+    replace_paths: &'a [(String, Vec<String>)],
+    warnings: Vec<WarningRow<'a>>,
+}
+
+#[derive(Serialize)]
+struct WithNotes<'a, T: Serialize> {
+    mods: Vec<ModRow<'a>>,
+    #[serde(flatten)]
+    report: &'a T,
+    warnings: Vec<WarningRow<'a>>,
+}
+
+fn conflicts(
+    out: &mut impl Write,
+    user_dir: &Path,
+    target: &Target,
+    rules: Option<PathBuf>,
+    json: bool,
+) -> Outcome {
     let l = load(user_dir, target)?;
-    let report = analyze(&l.mods, &build_dep_graph(&l.mods), l.vanilla.as_ref());
+    let rules = rules_for(rules)?;
+    let deps = build_dep_graph(&l.mods);
+    let report = analyze(
+        &l.mods,
+        &intent_graph(&deps, &l.mods, &rules),
+        l.vanilla.as_ref(),
+    );
     if json {
-        return print_json(out, &report);
+        return print_json(
+            out,
+            &ConflictsOutput {
+                mods: mod_rows(&l),
+                conflicts: &report.conflicts,
+                missing_mods: &report.missing_mods,
+                dep_issues: &report.dep_issues,
+                compatches: &report.compatches,
+                replace_paths: &report.replace_paths,
+                warnings: warning_rows(&l),
+            },
+        );
     }
     print_conflicts(out, &report, &l.mods)?;
     print_warnings(out, &l)?;
@@ -349,21 +467,11 @@ fn conflicts(out: &mut impl Write, user_dir: &Path, target: &Target, json: bool)
 
 /// One line per index warning (spec §5): broken files do not stop the analysis, but are shown.
 fn print_warnings(out: &mut impl Write, l: &Loaded) -> io::Result<()> {
-    let mut sources: Vec<(&str, &ModIndex)> = l
-        .mods
-        .iter()
-        .filter_map(|m| Some((m.name.as_str(), m.index.as_ref()?)))
-        .collect();
-    if let Some(v) = &l.vanilla {
-        sources.push(("vanilla", v));
-    }
-    for (name, index) in sources {
-        for w in &index.warnings {
-            if w.file.is_empty() {
-                writeln!(out, "warning: {name}: {}", w.message)?;
-            } else {
-                writeln!(out, "warning: {name}: {}: {}", w.file, w.message)?;
-            }
+    for w in warning_rows(l) {
+        if w.file.is_empty() {
+            writeln!(out, "warning: {}: {}", w.mod_name, w.message)?;
+        } else {
+            writeln!(out, "warning: {}: {}: {}", w.mod_name, w.file, w.message)?;
         }
     }
     Ok(())
@@ -371,9 +479,11 @@ fn print_warnings(out: &mut impl Write, l: &Loaded) -> io::Result<()> {
 
 #[derive(Serialize)]
 struct SortOutput<'a> {
+    mods: Vec<ModRow<'a>>,
     #[serde(flatten)]
     proposal: &'a SortProposal,
     applied: Option<&'a ApplyResult>,
+    warnings: Vec<WarningRow<'a>>,
 }
 
 fn reason_text(
@@ -410,20 +520,7 @@ fn sort(
     apply: bool,
 ) -> Outcome {
     let l = load(user_dir, target)?;
-    let rules = match rules {
-        Some(path) if !path.is_file() => {
-            return Err(Failure::Message(format!(
-                "rules file not found: {}",
-                path.display()
-            )));
-        }
-        Some(path) => load_rules(&path)?,
-        // The default location may be absent; `load_rules` then means "no rules".
-        None => match config_dir() {
-            Some(d) => load_rules(&d.join(RULES_FILE))?,
-            None => Vec::new(),
-        },
-    };
+    let rules = rules_for(rules)?;
     let deps = build_dep_graph(&l.mods);
     let proposal = propose(&l.mods, &deps, &rules, l.vanilla.as_ref())?;
     let nothing_to_apply = proposal.moves.is_empty();
@@ -445,8 +542,10 @@ fn sort(
         return print_json(
             out,
             &SortOutput {
+                mods: mod_rows(&l),
                 proposal: &proposal,
                 applied: applied.as_ref(),
+                warnings: warning_rows(&l),
             },
         );
     }
@@ -587,7 +686,14 @@ fn calibrate_cmd(out: &mut impl Write, user_dir: &Path, target: &Target, json: b
     let run_check = check_last_run(user_dir, &l.mods);
     let report = calibrate(&log, &l.mods, l.vanilla.as_ref(), run_check);
     if json {
-        return print_json(out, &report);
+        return print_json(
+            out,
+            &WithNotes {
+                mods: mod_rows(&l),
+                report: &report,
+                warnings: warning_rows(&l),
+            },
+        );
     }
     print_calibration(out, &report, &l.mods)?;
     print_warnings(out, &l)?;

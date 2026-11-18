@@ -347,3 +347,62 @@ fn help_describes_json_and_apply() {
         .stdout(contains("only flag that writes"))
         .stdout(contains("Print JSON"));
 }
+
+#[test]
+fn conflicts_respects_rules() {
+    let (tmp, ud) = fixture();
+    let rules = swap_rules(tmp.path());
+    cmd(&ud)
+        .args(["conflicts", "--rules"])
+        .arg(&rules)
+        .assert()
+        .success()
+        .stdout(contains("[intended] object common/traits::shared_trait"));
+}
+
+#[test]
+fn conflicts_explicit_missing_rules_file_fails() {
+    let (tmp, ud) = fixture();
+    cmd(&ud)
+        .args(["conflicts", "--rules"])
+        .arg(tmp.path().join("nope_rules.toml"))
+        .assert()
+        .code(1)
+        .stderr(contains("nope_rules.toml"));
+}
+
+#[test]
+fn json_outputs_carry_mod_names_and_warnings() {
+    let (tmp, ud) = fixture();
+    write_log(&ud);
+    let game = tmp.path().join("game");
+    ck3h_core::testkit::write_mod(
+        tmp.path(),
+        "game",
+        &[("common/traits/00.txt", b"vanilla_trait = {}")],
+    );
+    let game_arg = game.to_str().unwrap().to_string();
+    let calibrate_args = vec!["calibrate", "--json", "--game", game_arg.as_str()];
+    for args in [
+        vec!["conflicts", "--json"],
+        vec!["sort", "--json"],
+        calibrate_args,
+    ] {
+        let out = cmd(&ud).args(&args).output().unwrap();
+        assert!(out.status.success(), "{args:?}");
+        let text = String::from_utf8(out.stdout).unwrap();
+        assert_eq!(text.matches("\"warnings\"").count(), 1, "{args:?}");
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let mods = v["mods"].as_array().unwrap();
+        assert!(mods.iter().any(|m| m["name"] == "Base A"), "{args:?}");
+        assert!(mods[0]["id"].is_string() && mods[0]["position"] == 0);
+        assert!(
+            v["warnings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|w| w["mod"] == "Broken" && w["file"] == "common/traits/bad.txt"),
+            "{args:?}"
+        );
+    }
+}
