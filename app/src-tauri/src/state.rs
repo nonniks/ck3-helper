@@ -126,7 +126,8 @@ impl AppState {
 
     /// Loads and analyses a playset (`None`: the active one) and keeps it as the current
     /// analysis. Rules come from `rules.toml` in the config folder; a file that does not load
-    /// gives `rules_error` and no rules. Vanilla is included when the setting is on.
+    /// gives `rules_error` and no rules. Vanilla is included when the setting is on and a game
+    /// folder is usable; without one the analysis runs without vanilla and the setting is kept.
     pub fn analyze(
         &self,
         playset_id: Option<&str>,
@@ -146,16 +147,16 @@ impl AppState {
             Ok(rules) => (rules, None),
             Err(e) => (Vec::new(), Some(e.to_string())),
         };
-        if settings.show_vanilla {
-            self.ensure_vanilla(&lang, progress)?;
-        }
+        let vanilla_on = settings.show_vanilla
+            && match self.ensure_vanilla(&lang, progress) {
+                Ok(()) => true,
+                Err(e) if e.code == ErrorCode::NotGameDir => false,
+                Err(e) => return Err(e),
+            };
         progress(Progress::Conflicts);
         let analysis = {
             let vanilla = lock(&self.vanilla);
-            let index = vanilla
-                .as_ref()
-                .filter(|_| settings.show_vanilla)
-                .map(|v| &v.index);
+            let index = vanilla.as_ref().filter(|_| vanilla_on).map(|v| &v.index);
             Analysis::new(loaded, rules, rules_error, index)
         };
         let view = analysis.view();

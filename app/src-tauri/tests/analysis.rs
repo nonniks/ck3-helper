@@ -227,6 +227,19 @@ fn vanilla_toggle_needs_game_dir() {
 }
 
 #[test]
+fn analyze_without_game_folder_skips_vanilla_and_keeps_setting() {
+    let f = fixture(&[]);
+    let mut s = f.state.settings();
+    s.show_vanilla = true;
+    f.state.save_settings(s).unwrap();
+    let v = f.state.analyze(None, &|_| {}).unwrap();
+    assert!(!v.vanilla);
+    assert!(v.pairs.iter().all(|p| p.loser.kind != SourceKind::Vanilla));
+    assert!(f.state.settings().show_vanilla);
+    assert!(load_settings(f.config.path()).settings.show_vanilla);
+}
+
+#[test]
 fn vanilla_toggle_adds_vanilla_pair_and_persists() {
     let f = fixture(GAME);
     f.state.analyze(None, &|_| {}).unwrap();
