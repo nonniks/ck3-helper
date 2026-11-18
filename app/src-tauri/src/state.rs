@@ -401,14 +401,15 @@ impl AppState {
         &self,
         progress: &(dyn Fn(Progress) + Sync),
     ) -> Result<CalibrationView, AppError> {
+        let user_dir = self.user_dir()?;
         let lang = self.with_analysis(|a, _| a.loaded.lang.clone())?;
         self.ensure_vanilla(&lang, progress)?;
-        let log = read_conflicts_log(&self.user_dir()?)?;
+        let log = read_conflicts_log(&user_dir)?;
         let analysis = lock(&self.analysis);
         let a = analysis.as_ref().ok_or_else(not_analyzed)?;
         let vanilla = lock(&self.vanilla);
         let mods = &a.loaded.mods;
-        let run_check = check_last_run(&self.user_dir()?, mods);
+        let run_check = check_last_run(&user_dir, mods);
         let report = calibrate(&log, mods, vanilla.as_ref().map(|v| &v.index), run_check);
         let counts = |m: std::collections::BTreeMap<String, usize>| {
             m.into_iter()
@@ -454,11 +455,20 @@ impl AppState {
     /// no settings write. Otherwise the day is recorded whatever the outcome; errors are silent.
     /// Recording it does not reset the analysis (only folder or language changes do).
     pub fn check_update(&self, now: i64) -> Option<UpdateView> {
+        self.check_update_with(env!("CARGO_PKG_REPOSITORY"), now)
+    }
+
+    /// `check_update` for a given repository URL. A broken `settings.toml` is left alone: no
+    /// request and no write (saving would replace the file and clear the error banner).
+    pub fn check_update_with(&self, repository: &str, now: i64) -> Option<UpdateView> {
+        if lock(&self.settings_error).is_some() {
+            return None;
+        }
         let settings = self.settings();
         if !update::due(&settings, now) {
             return None;
         }
-        let api = update::releases_api(env!("CARGO_PKG_REPOSITORY"))?;
+        let api = update::releases_api(repository)?;
         let found = update::fetch_latest(&api, env!("CARGO_PKG_VERSION"))
             .ok()
             .flatten();

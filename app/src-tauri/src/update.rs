@@ -33,7 +33,10 @@ pub fn newer_release(current: &str, tag: &str) -> bool {
 
 /// Updates are enabled and the last check was at least a day ago (or never).
 pub fn due(settings: &Settings, now: i64) -> bool {
-    settings.check_updates && settings.update_checked_at.is_none_or(|t| now - t >= DAY)
+    settings.check_updates
+        && settings
+            .update_checked_at
+            .is_none_or(|t| now.saturating_sub(t) >= DAY)
 }
 
 #[derive(serde::Deserialize)]
@@ -100,5 +103,8 @@ mod tests {
         assert!(due(&s, 100_000 + 86_400));
         s.check_updates = false;
         assert!(!due(&s, 999_999));
+        s.check_updates = true;
+        s.update_checked_at = Some(i64::MIN);
+        assert!(due(&s, 100_000));
     }
 }

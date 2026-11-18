@@ -77,9 +77,37 @@ fn calibrate_needs_analysis() {
     );
 }
 
+const REPO: &str = "https://github.com/o/ck3-helper";
+
 #[test]
 fn check_update_without_repository_does_nothing() {
     let f = fixture();
-    assert_eq!(f.state.check_update(1_000_000), None);
+    assert_eq!(f.state.check_update_with("", 1_000_000), None);
     assert_eq!(f.state.settings().update_checked_at, None);
+}
+
+#[test]
+fn check_update_not_due_does_nothing() {
+    let f = fixture();
+    let mut s = f.state.settings();
+    s.update_checked_at = Some(1_000_000);
+    f.state.save_settings(s).unwrap();
+    assert_eq!(f.state.check_update_with(REPO, 1_000_100), None);
+    assert_eq!(f.state.settings().update_checked_at, Some(1_000_000));
+}
+
+#[test]
+fn check_update_leaves_broken_settings_alone() {
+    let config = tempfile::tempdir().unwrap();
+    let file = config.path().join("settings.toml");
+    std::fs::write(&file, "this is = = not toml").unwrap();
+    let state = AppState::new(config.path().to_path_buf());
+    assert!(state.setup().settings_error.is_some());
+    assert_eq!(state.check_update_with(REPO, 1_000_000), None);
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        "this is = = not toml"
+    );
+    assert!(!config.path().join("settings.toml.bak").exists());
+    assert!(state.setup().settings_error.is_some());
 }
