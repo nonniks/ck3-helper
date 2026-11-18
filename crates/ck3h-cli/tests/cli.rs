@@ -45,7 +45,7 @@ fn conflicts_text_output() {
         .assert()
         .success()
         .stdout(contains(
-            "[suspicious] file events/shared_events.txt — winner: Base B; losers: Base A (lower in playset)",
+            "[suspicious] file events/shared_events.txt — winner: Base B (lower in playset); losers: Base A\n",
         ))
         .stdout(contains("missing on disk: Ghost"))
         .stdout(contains("dependency missing: Broken -> Missing Mod"))
@@ -68,6 +68,9 @@ fn sort_dry_run_does_not_write() {
         .arg("sort")
         .assert()
         .success()
+        .stdout(contains(
+            "moves: 0 (the current order already satisfies dependencies and rules)",
+        ))
         .stdout(contains("winner changes: 0"));
     assert_eq!(playset_count(&ud.join("launcher-v2.sqlite")), 1);
 }
@@ -92,6 +95,7 @@ fn sort_reports_moves_from_rules() {
         .arg(&rules)
         .assert()
         .success()
+        .stdout(contains("moves: 2\n"))
         .stdout(contains(
             "move Base B: #2 -> #1 (your rule: before Base A — B first)",
         ))

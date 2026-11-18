@@ -317,12 +317,12 @@ fn print_conflicts(
         let losers: Vec<String> = c.losers.iter().map(|l| source_name(&names, l)).collect();
         writeln!(
             out,
-            "[{verdict}] {} {} — winner: {}; losers: {} ({})",
+            "[{verdict}] {} {} — winner: {} ({}); losers: {}",
             level_word(c.level),
             c.target,
             source_name(&names, &c.winner),
-            losers.join(", "),
-            reason_word(c.reason)
+            reason_word(c.reason),
+            losers.join(", ")
         )?;
     }
     for id in &report.missing_mods {
@@ -471,6 +471,14 @@ fn sort(
         );
     }
     let names = names(&l.mods);
+    if nothing_to_apply {
+        writeln!(
+            out,
+            "moves: 0 (the current order already satisfies dependencies and rules)"
+        )?;
+    } else {
+        writeln!(out, "moves: {}", proposal.moves.len())?;
+    }
     for m in &proposal.moves {
         let reasons: Vec<String> = m
             .reasons
