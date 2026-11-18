@@ -5,7 +5,7 @@ use crate::dto::{
     LevelView, MoveReasonView, MoveView, OrderRow, ProposalView, RuleView, WinnerChangeView,
 };
 use ck3h_core::sort::{MoveReason, SortProposal};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub fn proposal_view(a: &Analysis, p: &SortProposal) -> ProposalView {
     let mut current: Vec<&_> = a.loaded.mods.iter().collect();
@@ -25,6 +25,8 @@ pub fn proposal_view(a: &Analysis, p: &SortProposal) -> ProposalView {
         a.find(id)
             .map_or_else(|| id.to_string(), |m| m.name.clone())
     };
+    // Only moves count as moved; a mod shifted because its neighbours moved does not (§4.5).
+    let moved: BTreeSet<&str> = p.moves.iter().map(|m| m.mod_id.as_str()).collect();
 
     let rows = p
         .order
@@ -38,7 +40,7 @@ pub fn proposal_view(a: &Analysis, p: &SortProposal) -> ProposalView {
                 enabled: a.find(id).is_some_and(|m| m.enabled),
                 from,
                 to,
-                moved: from != to,
+                moved: moved.contains(id.as_str()),
             }
         })
         .collect();

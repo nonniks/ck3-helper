@@ -124,6 +124,21 @@ test('table shows 1-based new positions and previous positions of moved mods', a
   expect(screen.getByText(ru.order.was.replace('{{from}}', '2'))).toBeInTheDocument();
 });
 
+test('a mod that only shifted is not shown as moved', async () => {
+  handlers.propose = () => ({
+    ...proposal,
+    rows: [
+      { id: 'c', name: 'Shifted C', enabled: true, from: 2, to: 0, moved: false },
+      ...proposal.rows.map((r) => ({ ...r, to: r.to + 1 })),
+    ],
+  });
+  renderScreen();
+  await screen.findByRole('table');
+  const shifted = screen.getByRole('row', { name: /Shifted C/ });
+  expect(within(shifted).queryByText(/было/)).toBeNull();
+  expect(screen.getByText(ru.order.was.replace('{{from}}', '2'))).toBeInTheDocument();
+});
+
 test('apply flow shows the copy name and reveals the backup', async () => {
   const user = userEvent.setup();
   renderScreen();

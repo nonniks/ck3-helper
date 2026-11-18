@@ -88,7 +88,43 @@ fn proposal_moves_dependent_after_dependency() {
         }]
     );
     assert!(!p.already_sorted);
+    // Both ends of the broken constraint are moves.
+    assert_eq!(p.moves.len(), 2);
     assert!(p.rows.iter().all(|r| r.moved));
+}
+
+#[test]
+fn mods_that_only_shift_are_not_moved() {
+    let f = setup(
+        &[
+            ("A", &["E"]),
+            ("B", &[]),
+            ("C", &[]),
+            ("D", &[]),
+            ("E", &[]),
+        ],
+        NO_PROCESS,
+    );
+    let p = f.state.propose().unwrap();
+    assert_eq!(row_names(&p), ["B", "C", "D", "E", "A"]);
+    let rows: Vec<(&str, bool, usize, usize)> = p
+        .rows
+        .iter()
+        .map(|r| (r.name.as_str(), r.moved, r.from, r.to))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("B", false, 1, 0),
+            ("C", false, 2, 1),
+            ("D", false, 3, 2),
+            ("E", true, 4, 3),
+            ("A", true, 0, 4),
+        ]
+    );
+    let mut moves: Vec<&str> = p.moves.iter().map(|m| m.name.as_str()).collect();
+    moves.sort();
+    assert_eq!(moves, ["A", "E"]);
 }
 
 #[test]
