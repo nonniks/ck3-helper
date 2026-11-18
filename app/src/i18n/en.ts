@@ -58,8 +58,64 @@ export const en = {
     warningsEmpty: 'No warnings.',
   },
   counts: {
+    files_one: '{{count}} file',
+    files_other: '{{count}} files',
     objects_one: '{{count}} object',
     objects_other: '{{count}} objects',
+    loc_one: '{{count}} localization line',
+    loc_other: '{{count}} localization lines',
+  },
+  source: {
+    vanilla: 'Vanilla',
+  },
+  verdict: {
+    suspicious: 'suspicious',
+    intended: 'intended',
+    vanilla: 'vanilla',
+  },
+  level: {
+    file: 'file',
+    object: 'object',
+    loc: 'localization',
+  },
+  conflicts: {
+    vanilla: 'Include vanilla',
+    vanillaNoGameDir: 'Needs the game folder: set it in settings.',
+    verdicts: 'Verdicts',
+    levels: 'Level',
+    tabPairs: 'Mod pairs',
+    tabAll: 'All conflicts',
+    search: 'Search by path or key',
+    pair: '{{winner}} → {{loser}}',
+    noPairs: 'No mod pairs with these verdicts.',
+    noConflicts: 'No conflicts found.',
+    total: 'Conflicts: {{count}}',
+    winner: 'Winner',
+    loser: 'Overridden',
+  },
+  explain: {
+    fileLower:
+      'The file of mod {{winner}} is loaded: it is lower in the playset; the copies of the other mods are not loaded',
+    objectLater:
+      'The game reads the database files in path order and takes the last definition: {{winnerFile}} comes after {{loserFile}}. The mod order does not decide here — a compatch is needed',
+    locEarlier: 'Among regular localization files the first definition in path order wins',
+    locReplace: 'A file from the replace folder overrides regular ones',
+    vanillaWins: "The mod's change does not take effect in the game",
+  },
+  markIntended: {
+    button: 'Intended',
+    cycle:
+      '{{loser}} already depends on {{winner}} (rules included): a rule “{{loser}} before {{winner}}” would create a cycle',
+  },
+  confirm: {
+    markIntendedTitle: 'Mark as intended?',
+    markIntended:
+      '{{loser}} will load before {{winner}}; if {{winner}} is above {{loser}} now, the “Order” screen will show a move',
+    ok: 'Confirm',
+    cancel: 'Cancel',
+  },
+  rules: {
+    intendedNote: 'intended: {{winner}} overrides {{loser}}',
   },
   errors: {
     unknown: 'Something went wrong.',

@@ -58,10 +58,70 @@ export const ru = {
     warningsEmpty: 'Предупреждений нет.',
   },
   counts: {
+    files_one: '{{count}} файл',
+    files_few: '{{count}} файла',
+    files_many: '{{count}} файлов',
+    files_other: '{{count}} файла',
     objects_one: '{{count}} объект',
     objects_few: '{{count}} объекта',
     objects_many: '{{count}} объектов',
     objects_other: '{{count}} объекта',
+    loc_one: '{{count}} строка локализации',
+    loc_few: '{{count}} строки локализации',
+    loc_many: '{{count}} строк локализации',
+    loc_other: '{{count}} строки локализации',
+  },
+  source: {
+    vanilla: 'Ваниль',
+  },
+  verdict: {
+    suspicious: 'подозрительно',
+    intended: 'задумано',
+    vanilla: 'ваниль',
+  },
+  level: {
+    file: 'файл',
+    object: 'объект',
+    loc: 'локализация',
+  },
+  conflicts: {
+    vanilla: 'Учитывать ваниль',
+    vanillaNoGameDir: 'Нужна папка игры: укажите её в настройках.',
+    verdicts: 'Пометки',
+    levels: 'Уровень',
+    tabPairs: 'Пары модов',
+    tabAll: 'Все конфликты',
+    search: 'Поиск по пути или ключу',
+    pair: '{{winner}} → {{loser}}',
+    noPairs: 'Пар модов с такими пометками нет.',
+    noConflicts: 'Конфликтов не найдено.',
+    total: 'Конфликтов: {{count}}',
+    winner: 'Победитель',
+    loser: 'Перекрыт',
+  },
+  explain: {
+    fileLower:
+      'Загружается файл мода {{winner}}: он ниже в плейсете; копии остальных модов не загружаются',
+    objectLater:
+      'Игра читает файлы базы по алфавиту пути и берёт последнее определение: {{winnerFile}} идёт после {{loserFile}}. Порядок модов тут не решает — нужен compatch',
+    locEarlier: 'Из обычных файлов локализации побеждает первое определение по алфавиту пути',
+    locReplace: 'Файл из папки replace перебивает обычные',
+    vanillaWins: 'Правка мода в игре не действует',
+  },
+  markIntended: {
+    button: 'Задумано',
+    cycle:
+      '{{loser}} уже зависит от {{winner}} (с учётом правил): правило «{{loser}} раньше {{winner}}» создало бы цикл',
+  },
+  confirm: {
+    markIntendedTitle: 'Пометить как задуманное?',
+    markIntended:
+      '{{loser}} будет грузиться раньше {{winner}}; если сейчас {{winner}} выше {{loser}}, на экране «Порядок» появится перестановка',
+    ok: 'Подтвердить',
+    cancel: 'Отмена',
+  },
+  rules: {
+    intendedNote: 'задумано: {{winner}} перекрывает {{loser}}',
   },
   errors: {
     unknown: 'Что-то пошло не так.',

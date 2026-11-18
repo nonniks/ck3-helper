@@ -1,5 +1,5 @@
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { analyze, type Progress } from './client';
+import { analyze, setVanilla, type Progress } from './client';
 
 export const queryKeys = {
   setup: ['setup'] as const,
@@ -25,6 +25,27 @@ export function useAnalyze() {
       queryClient.setQueryData(queryKeys.summary, data);
       for (const key of ['pair', 'search', 'rules', 'proposal', 'calibration']) {
         queryClient.removeQueries({ queryKey: [key] });
+      }
+    },
+    onSettled: () => queryClient.removeQueries({ queryKey: queryKeys.analysisProgress }),
+  });
+}
+
+/**
+ * `set_vanilla` recomputes the report (and may index the game), so it shares the analysis key
+ * prefix and progress: the shell shows its progress and every analysis action waits for it.
+ */
+export function useSetVanilla() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: [...queryKeys.analyze, 'vanilla'],
+    mutationFn: (on: boolean) =>
+      setVanilla(on, (p) => queryClient.setQueryData(queryKeys.analysisProgress, p)),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.summary, data);
+      for (const key of ['pair', 'search']) void queryClient.resetQueries({ queryKey: [key] });
+      for (const key of ['rules', 'proposal', 'calibration', 'setup']) {
+        void queryClient.invalidateQueries({ queryKey: [key] });
       }
     },
     onSettled: () => queryClient.removeQueries({ queryKey: queryKeys.analysisProgress }),
