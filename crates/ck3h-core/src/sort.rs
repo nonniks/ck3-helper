@@ -85,6 +85,40 @@ fn parse(text: &str) -> Result<Vec<Rule>, toml::de::Error> {
     toml::from_str::<RulesFile>(text).map(|file| file.rule)
 }
 
+/// Applied rules as `(before id, after id, rule index)`: each name matches exactly one mod of
+/// the playset, both mods are enabled and they differ. The other rules are unresolved, in order.
+pub fn resolve_rules(
+    mods: &[ModEntry],
+    rules: &[Rule],
+) -> (Vec<(String, String, usize)>, Vec<Rule>) {
+    let enabled_id = |name: &str| match match_name(mods, name) {
+        NameMatch::One(id) if mods.iter().any(|m| m.id == id && m.enabled) => Some(id),
+        NameMatch::One(_) | NameMatch::None | NameMatch::Many(_) => None,
+    };
+    let mut applied = Vec::new();
+    let mut unresolved = Vec::new();
+    for (i, rule) in rules.iter().enumerate() {
+        match (enabled_id(&rule.before), enabled_id(&rule.after)) {
+            (Some(before), Some(after)) if before != after => applied.push((before, after, i)),
+            _ => unresolved.push(rule.clone()),
+        }
+    }
+    (applied, unresolved)
+}
+
+/// `deps` plus an edge `(before, after)` per applied rule: "A before B" counts as B depending
+/// on A when conflicts are marked (spec §4.4). `issues` and `compatches` stay those of `deps`.
+pub fn intent_graph(deps: &DepGraph, mods: &[ModEntry], rules: &[Rule]) -> DepGraph {
+    let mut intent = deps.clone();
+    let (applied, _) = resolve_rules(mods, rules);
+    intent.edges.extend(
+        applied
+            .into_iter()
+            .map(|(before, after, _)| (before, after)),
+    );
+    intent
+}
+
 /// "Load `earlier` before `later`", as indices into the current playset list.
 struct Constraint<'a> {
     earlier: usize,
@@ -120,19 +154,16 @@ pub fn propose(
             });
         }
     }
-    let resolve = |name: &str| match match_name(mods, name) {
-        NameMatch::One(id) => index_of.get(id.as_str()).copied(),
-        NameMatch::None | NameMatch::Many(_) => None,
-    };
-    let mut unresolved_rules = Vec::new();
-    for rule in rules {
-        match (resolve(&rule.before), resolve(&rule.after)) {
-            (Some(earlier), Some(later)) if earlier != later => constraints.push(Constraint {
+    let (applied, unresolved_rules) = resolve_rules(mods, rules);
+    for (before, after, i) in &applied {
+        if let (Some(&earlier), Some(&later)) =
+            (index_of.get(before.as_str()), index_of.get(after.as_str()))
+        {
+            constraints.push(Constraint {
                 earlier,
                 later,
-                rule: Some(rule),
-            }),
-            _ => unresolved_rules.push(rule.clone()),
+                rule: Some(&rules[*i]),
+            });
         }
     }
     constraints.sort_by_key(|c| (c.earlier, c.later));

@@ -101,6 +101,16 @@ pub struct ModIndex {
 }
 
 impl ModIndex {
+    /// Text of the first entry for `key` in `file`.
+    pub fn loc_value(&self, file: &RelPath, key: &str) -> Option<&str> {
+        let start = self.loc.partition_point(|l| *l.file < *file);
+        self.loc[start..]
+            .iter()
+            .take_while(|l| *l.file == *file)
+            .find(|l| l.key == key)
+            .map(|l| l.value.as_str())
+    }
+
     fn sort(&mut self) {
         self.files.sort();
         self.objects

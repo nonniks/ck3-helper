@@ -7,7 +7,8 @@ use crate::playset::ModEntry;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+/// Ordered mods first (by id), then vanilla.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum Source {
     /// Launcher id of the mod.
     Mod(String),
@@ -73,6 +74,18 @@ pub struct ConflictReport {
     pub replace_paths: Vec<(String, Vec<String>)>,
     /// `(mod id or "vanilla", warning)`.
     pub warnings: Vec<(String, IndexWarning)>,
+}
+
+/// A conflict winner and one of its losing sources, with how many conflicts of each level
+/// they share (spec §4.4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PairSummary {
+    pub winner: Source,
+    pub loser: Source,
+    pub verdict: Verdict,
+    pub files: usize,
+    pub objects: usize,
+    pub loc: usize,
 }
 
 /// Normalized path → its copies in load order (vanilla first); the last one is loaded.
@@ -243,6 +256,64 @@ pub(crate) fn analyze_ordered(
             })
             .collect(),
     }
+}
+
+/// Every winner → loser pair of the report. Each conflict counts once in each pair of its winner
+/// and a distinct losing source other than the winner. Marked by `intent` (dependencies plus
+/// rules); sorted suspicious, intended, vanilla, then by more conflicts, then by `(winner, loser)`.
+pub fn pairs(report: &ConflictReport, intent: &DepGraph) -> Vec<PairSummary> {
+    let closure = intent.closure();
+    let mut found: BTreeMap<(&Source, &Source), PairSummary> = BTreeMap::new();
+    for c in &report.conflicts {
+        let winner = &c.winner.source;
+        let mut counted: Vec<&Source> = Vec::new();
+        for loser in c.losers.iter().map(|l| &l.source) {
+            if loser == winner || counted.contains(&loser) {
+                continue;
+            }
+            counted.push(loser);
+            let pair = found.entry((winner, loser)).or_insert_with(|| PairSummary {
+                winner: winner.clone(),
+                loser: loser.clone(),
+                verdict: pair_verdict(winner, loser, &closure),
+                files: 0,
+                objects: 0,
+                loc: 0,
+            });
+            match c.level {
+                ConflictLevel::File => pair.files += 1,
+                ConflictLevel::Object => pair.objects += 1,
+                ConflictLevel::Loc => pair.loc += 1,
+            }
+        }
+    }
+    let rank = |v: Verdict| match v {
+        Verdict::Suspicious => 0,
+        Verdict::Intended => 1,
+        Verdict::Vanilla => 2,
+    };
+    let mut pairs: Vec<PairSummary> = found.into_values().collect();
+    pairs.sort_by(|a, b| {
+        rank(a.verdict)
+            .cmp(&rank(b.verdict))
+            .then_with(|| (b.files + b.objects + b.loc).cmp(&(a.files + a.objects + a.loc)))
+            .then_with(|| (&a.winner, &a.loser).cmp(&(&b.winner, &b.loser)))
+    });
+    pairs
+}
+
+fn pair_verdict(winner: &Source, loser: &Source, closure: &DepClosure) -> Verdict {
+    match (winner, loser) {
+        (_, Source::Vanilla) => Verdict::Vanilla,
+        (Source::Vanilla, _) => Verdict::Suspicious,
+        (Source::Mod(w), Source::Mod(l)) if closure.depends_on(w, l) => Verdict::Intended,
+        (Source::Mod(_), Source::Mod(_)) => Verdict::Suspicious,
+    }
+}
+
+/// True when `c` counts in the pair `winner` → `loser`.
+pub fn involves(c: &Conflict, winner: &Source, loser: &Source) -> bool {
+    c.winner.source == *winner && loser != winner && c.losers.iter().any(|l| l.source == *loser)
 }
 
 /// Enabled mods found on disk, by `position`.
