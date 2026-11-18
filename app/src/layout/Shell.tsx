@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AnalysisView } from '../api/bindings/AnalysisView';
-import { checkUpdate, getSetup, type Progress } from '../api/client';
-import { queryKeys, useAnalyze } from '../api/queries';
+import { checkUpdate, getSetup } from '../api/client';
+import { queryKeys, useAnalysisRunning, useAnalyze } from '../api/queries';
 import { errorMessage } from '../errors';
 import { detectLanguage } from '../i18n';
 import { CalibrationScreen } from '../screens/CalibrationScreen';
@@ -29,8 +29,8 @@ const views: Record<ScreenId, ReactNode> = {
 export function Shell() {
   const { t, i18n } = useTranslation();
   const [chosen, setActive] = useState<ScreenId | null>(null);
-  const [progress, setProgress] = useState<Progress | null>(null);
   const analyze = useAnalyze();
+  const { running: busy, progress } = useAnalysisRunning();
   const started = useRef(false);
 
   const setup = useQuery({ queryKey: queryKeys.setup, queryFn: getSetup, retry: false });
@@ -56,13 +56,12 @@ export function Shell() {
     if (!setupData || started.current) return;
     started.current = true;
     if (!setupData.launcherDbFound) return;
-    runAnalyze({ playsetId: null, onProgress: setProgress });
+    runAnalyze({ playsetId: null });
   }, [setupData, runAnalyze]);
 
   const active: ScreenId =
     chosen ?? (setupData && !setupData.launcherDbFound ? 'settings' : 'playset');
   const analysis = summary.data;
-  const busy = analyze.isPending;
   const progressText =
     progress === null
       ? t('progress.starting')
@@ -95,7 +94,7 @@ export function Shell() {
           busy={busy}
           canRefresh={analysis !== undefined}
           onRefresh={() =>
-            analysis && runAnalyze({ playsetId: analysis.playset.id, onProgress: setProgress })
+            analysis && runAnalyze({ playsetId: analysis.playset.id })
           }
           settingsError={setupData?.settingsError ?? null}
           update={update.data ?? null}

@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import type { AnalysisView } from '../api/bindings/AnalysisView';
 import type { ModView } from '../api/bindings/ModView';
 import { listPlaysets } from '../api/client';
-import { queryKeys, useAnalyze } from '../api/queries';
+import { queryKeys, useAnalysisRunning, useAnalyze } from '../api/queries';
 import { ModTable } from '../components/ModTable';
 import { WarningsDrawer } from '../components/WarningsDrawer';
 import { errorMessage } from '../errors';
@@ -15,6 +15,7 @@ export function PlaysetScreen() {
   const { t } = useTranslation();
   const [warningsMod, setWarningsMod] = useState<ModView | null>(null);
   const analyze = useAnalyze();
+  const { running } = useAnalysisRunning();
   const playsets = useQuery({ queryKey: queryKeys.playsets, queryFn: listPlaysets });
   const summary = useQuery<AnalysisView>({
     queryKey: queryKeys.summary,
@@ -34,6 +35,7 @@ export function PlaysetScreen() {
   return (
     <Stack>
       <Title order={2}>{t('screens.playset')}</Title>
+      {analyze.isError && <Alert color="red">{errorMessage(t, analyze.error)}</Alert>}
       {playsets.isError && <Alert color="red">{errorMessage(t, playsets.error)}</Alert>}
       <div>
         <Text fw={500} size="sm">
@@ -44,7 +46,7 @@ export function PlaysetScreen() {
             key={p.id}
             label={p.name}
             active={analysis?.playset.id === p.id}
-            disabled={analyze.isPending}
+            disabled={running}
             leftSection={
               p.active ? (
                 <IconCircleCheck size={16} aria-label={t('playset.activeInLauncher')} />
@@ -52,7 +54,7 @@ export function PlaysetScreen() {
             }
             onClick={() => {
               if (analysis?.playset.id !== p.id)
-                analyze.mutate({ playsetId: p.id, onProgress: () => {} });
+                analyze.mutate({ playsetId: p.id });
             }}
           />
         ))}

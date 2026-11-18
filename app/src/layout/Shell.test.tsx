@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { mockIPC } from '@tauri-apps/api/mocks';
 import { beforeEach, expect, test, vi } from 'vitest';
 import App from '../App';
@@ -58,4 +59,29 @@ test('update banner links to the release', async () => {
   });
   render(<App />);
   expect(await screen.findByText(/0\.2\.0/)).toBeInTheDocument();
+});
+
+test('analysis started from the playset list shows shared progress and disables refresh', async () => {
+  const user = userEvent.setup();
+  const first = {
+    playset: { id: 'p1', name: 'Main', active: true, mods: 0, enabled: 0 },
+    lang: 'english',
+    vanilla: false,
+    mods: [],
+    counts: { suspicious: 0, intended: 0, vanilla: 0, files: 0, objects: 0, loc: 0 },
+    pairs: [],
+    rulesError: null,
+  };
+  let calls = 0;
+  mockIPC((cmd) => {
+    if (cmd === 'get_setup') return setup;
+    if (cmd === 'list_playsets')
+      return [first.playset, { id: 'p2', name: 'Other', active: false, mods: 0, enabled: 0 }];
+    if (cmd === 'analyze') return ++calls === 1 ? first : new Promise(() => {});
+    return null;
+  });
+  render(<App />);
+  await user.click(await screen.findByText('Other'));
+  expect(await screen.findByText(ru.progress.starting)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: ru.header.refresh })).toBeDisabled();
 });
