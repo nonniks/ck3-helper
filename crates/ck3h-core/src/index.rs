@@ -101,14 +101,20 @@ pub struct ModIndex {
 }
 
 impl ModIndex {
-    /// Text of the first entry for `key` in `file`.
+    /// Text the game takes for `key` from `file`: the last entry in a `replace` file, else the first.
     pub fn loc_value(&self, file: &RelPath, key: &str) -> Option<&str> {
         let start = self.loc.partition_point(|l| *l.file < *file);
-        self.loc[start..]
+        let mut entries = self.loc[start..]
             .iter()
             .take_while(|l| *l.file == *file)
-            .find(|l| l.key == key)
-            .map(|l| l.value.as_str())
+            .filter(|l| l.key == key);
+        let first = entries.next()?;
+        let entry = if first.is_replace {
+            entries.last().unwrap_or(first)
+        } else {
+            first
+        };
+        Some(&entry.value)
     }
 
     fn sort(&mut self) {

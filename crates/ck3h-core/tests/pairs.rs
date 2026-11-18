@@ -137,9 +137,17 @@ fn rule_makes_conflicts_and_pair_intended() {
         find(&r, ConflictLevel::Object, "common/traits::shared_trait").verdict,
         Verdict::Intended
     );
+    let p = pairs(&r, &intent);
     assert_eq!(
-        pair(&mods, &pairs(&r, &intent), "Base A", "Base B").verdict,
+        pair(&mods, &p, "Base A", "Base B").verdict,
         Verdict::Intended
+    );
+    // The rule makes A depend on B, not B on A. B beats A only on the events file, whose two
+    // paths differ in case and so conflict everywhere but Linux.
+    #[cfg(not(target_os = "linux"))]
+    assert_eq!(
+        pair(&mods, &p, "Base B", "Base A").verdict,
+        Verdict::Suspicious
     );
     assert!(intent.compatches == deps.compatches && intent.issues == deps.issues);
 }
@@ -361,5 +369,33 @@ fn loc_value_by_file_and_key() {
             "k"
         ),
         None
+    );
+}
+
+#[test]
+fn loc_value_in_replace_file_is_its_last_line() {
+    // The game keeps the last line of a key in a replace file. The regular file sorts after it,
+    // so the lookup must also stop at the replace file's end.
+    let (_t, mods) = custom(&[(
+        "R",
+        true,
+        &[
+            (
+                "localization/english/replace/r_l_english.yml",
+                "\u{feff}l_english:\n k:0 \"First\"\n j:0 \"J\"\n k:1 \"Second\"\n".as_bytes(),
+            ),
+            (
+                "localization/english/zz_l_english.yml",
+                "\u{feff}l_english:\n k:0 \"Regular\"\n".as_bytes(),
+            ),
+        ],
+    )]);
+    let index = mods[0].index.as_ref().unwrap();
+    let replace = RelPath::new("localization/english/replace/r_l_english.yml");
+    assert_eq!(index.loc_value(&replace, "k"), Some("Second"));
+    assert_eq!(index.loc_value(&replace, "j"), Some("J"));
+    assert_eq!(
+        index.loc_value(&RelPath::new("localization/english/zz_l_english.yml"), "k"),
+        Some("Regular")
     );
 }
