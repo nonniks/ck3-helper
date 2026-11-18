@@ -267,3 +267,31 @@ fn preview_matches_applied_name() {
 fn order_mismatch_text_names_no_command() {
     assert!(!CoreError::OrderMismatch.to_string().contains("ck3h"));
 }
+
+#[test]
+fn backup_keeps_rows_still_in_the_wal() {
+    let fx = setup();
+    let conn = Connection::open(&fx.db).unwrap();
+    conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+    conn.pragma_update(None, "wal_autocheckpoint", 0).unwrap();
+    // committed, but only in the -wal file: a plain copy of the main file loses it
+    add_playset(&conn, "Only in WAL", false);
+
+    let r = apply_order(&fx.db, &fx.src, &order(&fx, [2, 0, 1]), now(), NONE).unwrap();
+
+    let backup =
+        Connection::open_with_flags(&r.backup_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+    let wal_row: i64 = backup
+        .query_row(
+            "SELECT COUNT(*) FROM playsets WHERE name = 'Only in WAL'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(wal_row, 1);
+    let check: String = backup
+        .query_row("PRAGMA integrity_check", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(check, "ok");
+    drop(conn);
+}
