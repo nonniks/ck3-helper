@@ -234,6 +234,16 @@ fn create_backup(
                     let _ = std::fs::remove_file(&path); // our own empty file
                     return Err(e.into());
                 }
+                // SQLite does not sync VACUUM INTO output. Opened for writing: Windows refuses
+                // to flush a read-only handle.
+                let synced = OpenOptions::new()
+                    .write(true)
+                    .open(&path)
+                    .and_then(|f| f.sync_all());
+                if let Err(e) = synced {
+                    let _ = std::fs::remove_file(&path); // our own unsynced copy
+                    return Err(e.into());
+                }
                 return Ok(path);
             }
             Err(e) if e.kind() == ErrorKind::AlreadyExists => continue,
