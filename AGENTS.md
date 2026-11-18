@@ -11,7 +11,7 @@ License: GPL-3.0-or-later.
 |---|---|
 | `crates/ck3h-core` | All CK3 knowledge: launcher DB, `descriptor.mod`, mod index, conflict engine, sorter, playset writer, calibration. No UI, no network. |
 | `crates/ck3h-cli` | `ck3h` binary, a thin `clap` layer over the core. |
-| `app/` | Tauri v2 + React + TypeScript (plan 2, not started). |
+| `app/` | Desktop app: Tauri v2 shell (`app/src-tauri`, crate `ck3h-app`) + React 19, TypeScript, Mantine 9 UI. Needs Node 22.22+ (Node 24 recommended). |
 | `docs/` | Design specs, implementation plans, glossary — start at `docs/README.md`. |
 
 ## Commands
@@ -21,6 +21,8 @@ cargo test --workspace --all-features
 cargo clippy --workspace --all-features -- -D warnings
 cargo fmt --all
 cargo run -p ck3h-cli -- conflicts        # reads the real launcher DB, read-only
+cd app && npm ci && npm run lint && npm run typecheck && npm test
+npm --prefix app run tauri dev            # run the desktop app
 ```
 
 ## Invariants
@@ -38,6 +40,8 @@ These hold in every change. A change that needs to break one goes to the owner f
   schemas become warnings or `CoreError`, never `unwrap` failures.
 - **Engine rules live in one place**: spec §4.3. Changing how a winner is decided means updating
   that section, its tests, and re-running `ck3h calibrate` on a real playset.
+- **The app writes only** `<config>/ck3-helper/settings.toml`, `settings.toml.bak` and `rules.toml`;
+  the launcher DB goes through `apply_order` alone.
 - No telemetry. The core makes no network calls.
 
 ## Conventions
