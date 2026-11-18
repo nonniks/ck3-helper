@@ -151,7 +151,6 @@ dependencies = [
  "chrono",
  "ck3h-core",
  "clap",
- "dirs",
  "predicates",
  "serde",
  "serde_json",

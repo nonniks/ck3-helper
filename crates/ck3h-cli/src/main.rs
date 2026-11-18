@@ -569,7 +569,16 @@ fn calibrate_cmd(out: &mut impl Write, user_dir: &Path, target: &Target, json: b
         game: Some(game),
     };
     let l = load(user_dir, &target)?;
-    let log = read_conflicts_log(user_dir)?;
+    let log = read_conflicts_log(user_dir).map_err(|e| match e {
+        CoreError::Io(e) => Failure::Message(format!(
+            "{}: {e}",
+            user_dir
+                .join("logs")
+                .join("database_conflicts.log")
+                .display()
+        )),
+        e => Failure::Core(e),
+    })?;
     let run_check = check_last_run(user_dir, &l.mods);
     let report = calibrate(&log, &l.mods, l.vanilla.as_ref(), run_check);
     if json {
