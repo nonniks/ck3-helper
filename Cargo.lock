@@ -572,7 +572,9 @@ dependencies = [
 name = "ck3h-app"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "ck3h-core",
+ "rusqlite",
  "serde",
  "serde_json",
  "tauri",

@@ -13,7 +13,7 @@ use ck3h_core::deps::{DepClosure, DepGraph, DepIssueKind, build_dep_graph};
 use ck3h_core::index::ModIndex;
 use ck3h_core::playset::ModEntry;
 use ck3h_core::session::Loaded;
-use ck3h_core::sort::{Rule, intent_graph, resolve_rules};
+use ck3h_core::sort::{Rule, SortProposal, intent_graph, resolve_rules};
 use std::path::PathBuf;
 
 /// An analysed playset. Rules and the vanilla toggle change `intent`, `report` and `pairs`
@@ -30,6 +30,8 @@ pub struct Analysis {
     pub pairs: Vec<PairSummary>,
     /// The report includes vanilla, taken from `AppState`'s vanilla index.
     pub vanilla_on: bool,
+    /// The last load-order proposal; every `refresh` drops it, so it never outlives its inputs.
+    pub proposal: Option<SortProposal>,
 }
 
 /// Vanilla's index for one game folder and language; reused while both match.
@@ -57,6 +59,7 @@ impl Analysis {
             report,
             pairs,
             vanilla_on: vanilla.is_some(),
+            proposal: None,
         }
     }
 
@@ -66,6 +69,7 @@ impl Analysis {
         (self.intent, self.report, self.pairs) =
             derive(&self.loaded, &self.deps, &self.rules, vanilla);
         self.vanilla_on = vanilla.is_some();
+        self.proposal = None;
     }
 
     pub fn set_vanilla(&mut self, vanilla: Option<&ModIndex>) {
@@ -216,7 +220,7 @@ impl Analysis {
         }
     }
 
-    fn source_view(&self, source: &Source) -> SourceView {
+    pub(crate) fn source_view(&self, source: &Source) -> SourceView {
         match source {
             Source::Mod(id) => SourceView {
                 kind: SourceKind::Mod,

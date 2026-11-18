@@ -13,6 +13,7 @@ tauri-build = "2"
 
 [dependencies]
 ck3h-core = { path = "../../crates/ck3h-core" }
+chrono = "0.4.45"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1"
@@ -25,3 +26,4 @@ ts-rs = "12"
 [dev-dependencies]
 ck3h-core = { path = "../../crates/ck3h-core", features = ["testkit"] }
 tempfile = "3"
+rusqlite = { version = "0.43", features = ["bundled"] }

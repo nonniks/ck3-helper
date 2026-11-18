@@ -2,6 +2,7 @@ pub mod analysis;
 pub mod commands;
 pub mod dto;
 pub mod error;
+pub mod order;
 pub mod rules_file;
 pub mod settings;
 pub mod state;
@@ -30,7 +31,11 @@ pub fn run() {
             commands::rules,
             commands::add_rule,
             commands::mark_intended,
-            commands::remove_rule
+            commands::remove_rule,
+            commands::propose,
+            commands::launcher_status,
+            commands::apply_preview,
+            commands::apply
         ])
         .run(tauri::generate_context!())
         .expect("error while running CK3 Helper");

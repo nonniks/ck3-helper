@@ -1,18 +1,22 @@
 use crate::analysis::{Analysis, VanillaIndex, matches};
 use crate::dto::{
-    AnalysisView, ConflictQuery, ConflictView, IndexWarningView, Page, PlaysetRow, Progress,
-    RuleView, RulesView, SetupView,
+    AnalysisView, ApplyPreviewView, ApplyView, ConflictQuery, ConflictView, IndexWarningView,
+    LauncherStatus, Page, PlaysetRow, Progress, ProposalView, RuleView, RulesView, SetupView,
 };
 use crate::error::{AppError, ErrorCode};
+use crate::order::proposal_view;
 use crate::rules_file::{append_rule, remove_rule};
 use crate::settings::{Settings, SettingsFile, load_settings, save_settings};
+use ck3h_core::apply::{DEFAULT_LAUNCHER_PROCESS_NAMES, apply_order, launcher_processes, preview};
 use ck3h_core::conflicts::{Source, involves};
 use ck3h_core::error::CoreError;
 use ck3h_core::index::ModIndex;
 use ck3h_core::launcher::LAUNCHER_DB_FILE;
 use ck3h_core::paths::{RULES_FILE, default_game_dir, default_user_dir, game_language};
-use ck3h_core::session::{PlaysetSelector, analysis_lang, launcher_db, load, load_vanilla};
-use ck3h_core::sort::{Rule, load_rules};
+use ck3h_core::session::{
+    PlaysetSelector, analysis_lang, launcher_db, load, load_vanilla, playset_unchanged,
+};
+use ck3h_core::sort::{Rule, load_rules, propose};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
@@ -316,6 +320,75 @@ impl AppState {
             }
         }
         Ok(rules_view(&path, analysis.as_ref()))
+    }
+
+    /// The load-order proposal for the current analysis (with vanilla when it is on), kept in the
+    /// analysis for `apply`.
+    pub fn propose(&self) -> Result<ProposalView, AppError> {
+        let mut analysis = lock(&self.analysis);
+        let a = analysis.as_mut().ok_or_else(not_analyzed)?;
+        let vanilla = if a.vanilla_on {
+            Some(lock(&self.vanilla))
+        } else {
+            None
+        };
+        let index = vanilla.as_ref().and_then(|v| v.as_ref()).map(|v| &v.index);
+        let proposal = propose(&a.loaded.mods, &a.deps, &a.rules, index)?;
+        let view = proposal_view(a, &proposal);
+        a.proposal = Some(proposal);
+        Ok(view)
+    }
+
+    fn launcher_names(&self) -> Vec<String> {
+        self.settings().launcher_process_names.unwrap_or_else(|| {
+            DEFAULT_LAUNCHER_PROCESS_NAMES
+                .iter()
+                .map(|n| (*n).to_string())
+                .collect()
+        })
+    }
+
+    pub fn launcher_status(&self) -> LauncherStatus {
+        let names = self.launcher_names();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        match launcher_processes(&names) {
+            Ok(p) if p.is_empty() => LauncherStatus::NotRunning,
+            Ok(processes) => LauncherStatus::Running { processes },
+            Err(_) => LauncherStatus::Unknown,
+        }
+    }
+
+    pub fn apply_preview(&self) -> Result<ApplyPreviewView, AppError> {
+        self.with_analysis(|a, _| preview(&a.loaded.db_path, &a.loaded.playset.id))?
+            .map(|p| ApplyPreviewView {
+                new_playset_name: p.new_playset_name,
+                backup_dir: p.backup_dir.display().to_string(),
+            })
+            .map_err(AppError::from)
+    }
+
+    /// Saves the cached proposal as a new playset. The analysis lock is held throughout, so rule
+    /// edits wait and the proposal cannot change under the write. Refuses without a proposal that
+    /// has moves, and when the playset changed in the launcher since the analysis. The cached
+    /// proposal is spent afterwards.
+    pub fn apply(&self, now: chrono::DateTime<chrono::Local>) -> Result<ApplyView, AppError> {
+        let names = self.launcher_names();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let mut analysis = lock(&self.analysis);
+        let a = analysis.as_mut().ok_or_else(not_analyzed)?;
+        let order = match &a.proposal {
+            Some(p) if !p.moves.is_empty() => p.order.clone(),
+            _ => return Err(AppError::new(ErrorCode::NothingToApply)),
+        };
+        if !playset_unchanged(&a.loaded)? {
+            return Err(AppError::new(ErrorCode::PlaysetChanged));
+        }
+        let result = apply_order(&a.loaded.db_path, &a.loaded.playset.id, &order, now, &names)?;
+        a.proposal = None;
+        Ok(ApplyView {
+            new_playset_name: result.new_playset_name,
+            backup_path: result.backup_path.display().to_string(),
+        })
     }
 
     /// Runs `f` on the current analysis and, when it includes vanilla, the vanilla index.

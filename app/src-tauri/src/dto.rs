@@ -268,3 +268,93 @@ pub struct RulesView {
     pub error: Option<String>,
     pub rules: Vec<RuleView>,
 }
+
+/// Why a mod moves. Names, not ids. `before`: the mod now loads earlier than `other`.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[ts(export)]
+pub enum MoveReasonView {
+    Dependency {
+        on: String,
+    },
+    RequiredBy {
+        by: String,
+    },
+    UserRule {
+        other: String,
+        before: bool,
+        note: Option<String>,
+    },
+}
+
+/// A mod in the proposed order; `from` and `to` are 0-based positions, disabled mods included.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct OrderRow {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub from: usize,
+    pub to: usize,
+    pub moved: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct MoveView {
+    pub id: String,
+    pub name: String,
+    pub from: usize,
+    pub to: usize,
+    pub reasons: Vec<MoveReasonView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct WinnerChangeView {
+    pub level: LevelView,
+    pub target: String,
+    pub before: SourceView,
+    pub after: SourceView,
+}
+
+/// `unresolved_rules`: rules that order no two enabled mods of the playset.
+/// `already_sorted`: the proposal has no moves.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ProposalView {
+    pub rows: Vec<OrderRow>,
+    pub moves: Vec<MoveView>,
+    pub winner_changes: Vec<WinnerChangeView>,
+    pub unresolved_rules: Vec<RuleView>,
+    pub already_sorted: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(tag = "state", rename_all = "camelCase")]
+#[ts(export)]
+pub enum LauncherStatus {
+    NotRunning,
+    Running { processes: Vec<String> },
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ApplyPreviewView {
+    pub new_playset_name: String,
+    pub backup_dir: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ApplyView {
+    pub new_playset_name: String,
+    pub backup_path: String,
+}

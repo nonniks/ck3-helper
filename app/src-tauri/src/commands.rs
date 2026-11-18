@@ -1,6 +1,6 @@
 use crate::dto::{
-    AnalysisView, ConflictQuery, ConflictView, IndexWarningView, Page, PlaysetRow, Progress,
-    RulesView, SetupView,
+    AnalysisView, ApplyPreviewView, ApplyView, ConflictQuery, ConflictView, IndexWarningView,
+    LauncherStatus, Page, PlaysetRow, Progress, ProposalView, RulesView, SetupView,
 };
 use crate::error::{AppError, ErrorCode};
 use crate::settings::Settings;
@@ -139,4 +139,26 @@ pub async fn mark_intended(
 #[tauri::command]
 pub async fn remove_rule(app: AppHandle, index: usize) -> Result<RulesView, AppError> {
     blocking(move || app.state::<AppState>().remove_rule(index)).await
+}
+
+/// Re-analyses the playset in the proposed order, so it runs on the blocking pool.
+#[tauri::command]
+pub async fn propose(app: AppHandle) -> Result<ProposalView, AppError> {
+    blocking(move || app.state::<AppState>().propose()).await
+}
+
+#[tauri::command]
+pub async fn launcher_status(app: AppHandle) -> Result<LauncherStatus, AppError> {
+    blocking(move || Ok(app.state::<AppState>().launcher_status())).await
+}
+
+#[tauri::command]
+pub async fn apply_preview(state: State<'_, AppState>) -> Result<ApplyPreviewView, AppError> {
+    state.apply_preview()
+}
+
+/// The only command that writes the launcher database.
+#[tauri::command]
+pub async fn apply(app: AppHandle) -> Result<ApplyView, AppError> {
+    blocking(move || app.state::<AppState>().apply(chrono::Local::now())).await
 }
