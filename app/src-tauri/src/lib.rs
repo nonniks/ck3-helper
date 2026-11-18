@@ -1,3 +1,4 @@
+pub mod analysis;
 pub mod commands;
 pub mod dto;
 pub mod error;
@@ -18,7 +19,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_setup,
             commands::save_settings,
-            commands::list_playsets
+            commands::list_playsets,
+            commands::analyze,
+            commands::set_vanilla,
+            commands::summary,
+            commands::pair_conflicts,
+            commands::search_conflicts,
+            commands::mod_warnings
         ])
         .run(tauri::generate_context!())
         .expect("error while running CK3 Helper");
