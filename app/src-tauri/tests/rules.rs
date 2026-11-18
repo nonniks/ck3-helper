@@ -26,10 +26,12 @@ fn setup(user: impl FnOnce(&Path) -> PathBuf) -> Fixture {
     let root = tempfile::tempdir().unwrap();
     let config = tempfile::tempdir().unwrap();
     let user = user(root.path());
+    let game = write_mod(root.path(), "game", &[]);
     save_settings(
         config.path(),
         &Settings {
             user_dir: Some(user),
+            game_dir: Some(game),
             ..Settings::default()
         },
     )
