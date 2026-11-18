@@ -145,3 +145,18 @@ fn conflicts_log_missing_then_read() {
     .unwrap();
     assert_eq!(read_conflicts_log(&ud).unwrap().overrides.len(), 1);
 }
+
+#[test]
+fn unreadable_conflicts_log_error_names_the_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let ud = standard_fixture(tmp.path());
+    std::fs::create_dir_all(ud.join(CONFLICTS_LOG)).unwrap();
+    match read_conflicts_log(&ud) {
+        Err(CoreError::Io(e)) => assert!(
+            e.to_string()
+                .contains(&ud.join(CONFLICTS_LOG).display().to_string()),
+            "{e}"
+        ),
+        other => panic!("expected Io error, got {other:?}"),
+    }
+}

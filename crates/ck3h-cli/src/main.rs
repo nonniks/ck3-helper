@@ -674,13 +674,8 @@ fn calibrate_cmd(out: &mut impl Write, user_dir: &Path, target: &Target, json: b
     };
     let l = load(user_dir, &target)?;
     let log = read_conflicts_log(user_dir).map_err(|e| match e {
-        CoreError::Io(e) => Failure::Message(format!(
-            "{}: {e}",
-            user_dir
-                .join("logs")
-                .join("database_conflicts.log")
-                .display()
-        )),
+        // The core message already names the log file: `<path>: <io error>`.
+        CoreError::Io(e) => Failure::Message(e.to_string()),
         e => Failure::Core(e),
     })?;
     let run_check = check_last_run(user_dir, &l.mods);

@@ -86,7 +86,10 @@ pub fn read_conflicts_log(user_dir: &Path) -> Result<ParsedLog, CoreError> {
     let path = user_dir.join(CONFLICTS_LOG);
     let bytes = std::fs::read(&path).map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => CoreError::LogNotFound(path),
-        _ => CoreError::Io(e),
+        kind => CoreError::Io(std::io::Error::new(
+            kind,
+            format!("{}: {e}", path.display()),
+        )),
     })?;
     let (text, _) = crate::text::decode(&bytes);
     Ok(parse_conflicts_log(&text))
