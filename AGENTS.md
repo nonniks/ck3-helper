@@ -2,7 +2,7 @@
 
 CK3 Helper is a desktop tool for Crusader Kings III players with large playsets: it maps which
 mods override which (files, `common/` objects, localization keys), explains why each winner
-won, and proposes a load order. Rust core + CLI now; a Tauri app on the same core comes next.
+won, and proposes a load order. Rust core, CLI, and a Tauri app on the same core.
 License: GPL-3.0-or-later.
 
 ## Repo map
@@ -22,7 +22,8 @@ cargo clippy --workspace --all-features -- -D warnings
 cargo fmt --all
 cargo run -p ck3h-cli -- conflicts        # reads the real launcher DB, read-only
 cd app && npm ci && npm run lint && npm run typecheck && npm test
-npm --prefix app run tauri dev            # run the desktop app
+npm --prefix app run tauri dev            # run the desktop app (Node 22.22+)
+npm --prefix app run tauri build -- --bundles app,dmg   # local macOS bundle in target/release/bundle/
 ```
 
 ## Invariants
@@ -41,7 +42,8 @@ These hold in every change. A change that needs to break one goes to the owner f
 - **Engine rules live in one place**: spec §4.3. Changing how a winner is decided means updating
   that section, its tests, and re-running `ck3h calibrate` on a real playset.
 - **The app writes only** `<config>/ck3-helper/settings.toml`, `settings.toml.bak` and `rules.toml`;
-  the launcher DB goes through `apply_order` alone.
+  the launcher DB goes through `apply_order` alone. Its only network call is the update check
+  (`app/src-tauri/src/update.rs`).
 - No telemetry. The core makes no network calls.
 
 ## Conventions
