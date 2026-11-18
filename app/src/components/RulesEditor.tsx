@@ -17,7 +17,7 @@ import type { AnalysisView } from '../api/bindings/AnalysisView';
 import type { RuleView } from '../api/bindings/RuleView';
 import { addRule, removeRule, rules, summary } from '../api/client';
 import { queryKeys, useAnalysisRunning } from '../api/queries';
-import { errorMessage } from '../errors';
+import { ErrorAlert } from './ErrorAlert';
 
 export function RulesEditor() {
   const { t } = useTranslation();
@@ -72,7 +72,7 @@ export function RulesEditor() {
   return (
     <Stack>
       <Title order={3}>{t('rules.title')}</Title>
-      {rulesQuery.isError && <Alert color="red">{errorMessage(t, rulesQuery.error)}</Alert>}
+      {rulesQuery.isError && <ErrorAlert error={rulesQuery.error} />}
       {view && broken && (
         <Alert color="red">{t('rules.brokenFile', { path: view.path, detail: view.error })}</Alert>
       )}
@@ -139,7 +139,7 @@ export function RulesEditor() {
           {t('rules.add')}
         </Button>
       </Group>
-      {add.isError && <Alert color="red">{errorMessage(t, add.error)}</Alert>}
+      {add.isError && <ErrorAlert error={add.error} />}
       <Modal
         opened={removing !== null}
         onClose={() => setRemoving(null)}
@@ -150,7 +150,7 @@ export function RulesEditor() {
             {removing &&
               t('rules.removeConfirm', { before: removing.before, after: removing.after })}
           </Text>
-          {remove.isError && <Alert color="red">{errorMessage(t, remove.error)}</Alert>}
+          {remove.isError && <ErrorAlert error={remove.error} />}
           <Group justify="flex-end">
             <Button variant="default" onClick={() => setRemoving(null)}>
               {t('confirm.cancel')}

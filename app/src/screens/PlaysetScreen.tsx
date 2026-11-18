@@ -1,4 +1,4 @@
-import { Alert, Group, NavLink, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { Group, NavLink, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { IconCircleCheck } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -9,7 +9,7 @@ import { listPlaysets } from '../api/client';
 import { queryKeys, useAnalysisRunning, useAnalyze } from '../api/queries';
 import { ModTable } from '../components/ModTable';
 import { WarningsDrawer } from '../components/WarningsDrawer';
-import { errorMessage } from '../errors';
+import { ErrorAlert } from '../components/ErrorAlert';
 
 export function PlaysetScreen() {
   const { t } = useTranslation();
@@ -24,19 +24,20 @@ export function PlaysetScreen() {
   });
   const analysis = summary.data;
 
-  const stats = analysis && [
-    [t('playset.summaryMods'), analysis.mods.length],
-    [t('playset.summaryEnabled'), analysis.mods.filter((m) => m.enabled).length],
-    [t('playset.summaryMissing'), analysis.mods.filter((m) => m.missing).length],
-    [t('playset.summaryDepIssues'), analysis.mods.filter((m) => m.depIssues.length > 0).length],
-    [t('playset.summaryCompatch'), analysis.mods.filter((m) => m.compatch).length],
-  ] as const;
+  const stats =
+    analysis &&
+    ([
+      [t('playset.summaryMods'), analysis.mods.length],
+      [t('playset.summaryEnabled'), analysis.mods.filter((m) => m.enabled).length],
+      [t('playset.summaryMissing'), analysis.mods.filter((m) => m.missing).length],
+      [t('playset.summaryDepIssues'), analysis.mods.filter((m) => m.depIssues.length > 0).length],
+      [t('playset.summaryCompatch'), analysis.mods.filter((m) => m.compatch).length],
+    ] as const);
 
   return (
     <Stack>
       <Title order={2}>{t('screens.playset')}</Title>
-      {analyze.isError && <Alert color="red">{errorMessage(t, analyze.error)}</Alert>}
-      {playsets.isError && <Alert color="red">{errorMessage(t, playsets.error)}</Alert>}
+      {playsets.isError && <ErrorAlert error={playsets.error} />}
       <div>
         <Text fw={500} size="sm">
           {t('playset.list')}
@@ -53,8 +54,7 @@ export function PlaysetScreen() {
               ) : undefined
             }
             onClick={() => {
-              if (analysis?.playset.id !== p.id)
-                analyze.mutate({ playsetId: p.id });
+              if (analysis?.playset.id !== p.id) analyze.mutate({ playsetId: p.id });
             }}
           />
         ))}

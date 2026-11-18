@@ -14,6 +14,7 @@ import type { CalibrationView } from '../api/bindings/CalibrationView';
 import { calibrate, getSetup, isAppError, type Progress } from '../api/client';
 import { queryKeys, useAnalysisRunning } from '../api/queries';
 import { errorMessage } from '../errors';
+import { ErrorAlert } from '../components/ErrorAlert';
 
 const LIMIT = 200;
 
@@ -56,7 +57,7 @@ export function CalibrationScreen({ onOpenSettings }: { onOpenSettings: () => vo
   });
 
   if (!setup.data) {
-    return setup.isError ? <Alert color="red">{errorMessage(t, setup.error)}</Alert> : null;
+    return setup.isError ? <ErrorAlert error={setup.error} /> : null;
   }
 
   const progressText =

@@ -1,4 +1,4 @@
-import { Alert, Button, List, Loader, Stack, Text, Title } from '@mantine/core';
+import { Button, List, Loader, Stack, Text, Title } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +8,7 @@ import { launcherStatus, propose } from '../api/client';
 import { queryKeys, useAnalysisRunning } from '../api/queries';
 import { ApplyDialog } from '../components/ApplyDialog';
 import { OrderTable } from '../components/OrderTable';
-import { errorMessage } from '../errors';
+import { ErrorAlert } from '../components/ErrorAlert';
 
 function Details({ proposal }: { proposal: ProposalView }) {
   const { t } = useTranslation();
@@ -80,10 +80,9 @@ export function OrderScreen() {
     return (
       <Stack>
         {title}
-        <Alert color={cycle ? 'yellow' : 'red'}>
-          <Text size="sm">{errorMessage(t, proposal.error)}</Text>
+        <ErrorAlert error={proposal.error} color={cycle ? 'yellow' : 'red'}>
           {cycle && <Text size="sm">{t('order.cycleHint')}</Text>}
-        </Alert>
+        </ErrorAlert>
       </Stack>
     );
   }

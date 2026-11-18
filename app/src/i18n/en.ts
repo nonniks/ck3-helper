@@ -207,6 +207,16 @@ export const en = {
     launcherProcessNamesHint: 'Empty: the default list',
     save: 'Save',
   },
+  pluginError: 'The action failed: {{detail}}',
+  errorsPlain: {
+    launcherDbNotFound: 'The Paradox Launcher database was not found.',
+    launcherRunning: 'Close Paradox Launcher.',
+    cycle: 'The dependencies form a cycle. A rule against a dependency usually causes it.',
+    notGameDir: 'This is not a CK3 game folder.',
+    rules: 'The rules file cannot be read.',
+    settings: 'The settings file cannot be read.',
+    io: 'I/O error.',
+  },
   errors: {
     unknown: 'Something went wrong.',
     noUserDir: 'The CK3 user folder was not found. Set it in settings.',

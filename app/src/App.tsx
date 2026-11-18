@@ -5,7 +5,9 @@ import { useState } from 'react';
 import { Shell } from './layout/Shell';
 
 export default function App() {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  );
   return (
     <MantineProvider defaultColorScheme="auto">
       <QueryClientProvider client={queryClient}>

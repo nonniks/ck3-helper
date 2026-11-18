@@ -212,6 +212,16 @@ export const ru = {
     launcherProcessNamesHint: 'Пусто: список по умолчанию',
     save: 'Сохранить',
   },
+  pluginError: 'Не удалось выполнить действие: {{detail}}',
+  errorsPlain: {
+    launcherDbNotFound: 'База Paradox Launcher не найдена.',
+    launcherRunning: 'Закройте Paradox Launcher.',
+    cycle: 'Зависимости образуют цикл. Обычно его создаёт правило порядка против зависимости.',
+    notGameDir: 'Это не папка игры CK3.',
+    rules: 'Файл правил не читается.',
+    settings: 'Файл настроек не читается.',
+    io: 'Ошибка ввода-вывода.',
+  },
   errors: {
     unknown: 'Что-то пошло не так.',
     noUserDir: 'Папка пользователя CK3 не найдена. Укажите её в настройках.',

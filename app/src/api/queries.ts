@@ -7,6 +7,7 @@ export const queryKeys = {
   summary: ['summary'] as const,
   analyze: ['analyze'] as const,
   analysisProgress: ['analysisProgress'] as const,
+  analysisError: ['analysisError'] as const,
   pair: (winnerId: string | null, loserId: string | null) => ['pair', winnerId, loserId] as const,
   search: (query: unknown) => ['search', query] as const,
   rules: ['rules'] as const,
@@ -23,9 +24,15 @@ export function useAnalyze() {
       analyze(playsetId, (p) => queryClient.setQueryData(queryKeys.analysisProgress, p)),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.summary, data);
+      queryClient.setQueryData(queryKeys.analysisError, null);
       for (const key of ['pair', 'search', 'rules', 'proposal', 'calibration']) {
         queryClient.removeQueries({ queryKey: [key] });
       }
+    },
+    onError: (error) => {
+      // The Rust side dropped the previous analysis, so it must not look current.
+      void queryClient.resetQueries({ queryKey: queryKeys.summary });
+      queryClient.setQueryData(queryKeys.analysisError, error);
     },
     onSettled: () => queryClient.removeQueries({ queryKey: queryKeys.analysisProgress }),
   });
@@ -60,4 +67,12 @@ export function useAnalysisRunning(): { running: boolean; progress: Progress | n
     enabled: false,
   });
   return { running, progress: progress.data ?? null };
+}
+
+export function useAnalysisError(): unknown {
+  return useQuery<unknown>({
+    queryKey: queryKeys.analysisError,
+    queryFn: () => null,
+    enabled: false,
+  }).data;
 }

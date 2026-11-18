@@ -1,6 +1,5 @@
 import {
   Accordion,
-  Alert,
   Autocomplete,
   Button,
   Group,
@@ -12,6 +11,7 @@ import {
 } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { open } from '@tauri-apps/plugin-dialog';
+import { pluginCall } from '../plugins';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AnalysisView } from '../api/bindings/AnalysisView';
@@ -19,7 +19,7 @@ import type { Settings } from '../api/bindings/Settings';
 import { getSetup, saveSettings } from '../api/client';
 import { queryKeys, useAnalysisRunning, useAnalyze } from '../api/queries';
 import { RulesEditor } from '../components/RulesEditor';
-import { errorMessage } from '../errors';
+import { ErrorAlert } from '../components/ErrorAlert';
 import { detectLanguage } from '../i18n';
 
 const analysisLanguages = [
@@ -81,14 +81,14 @@ export function SettingsScreen() {
   });
 
   if (!setup.data || !current) {
-    return setup.isError ? <Alert color="red">{errorMessage(t, setup.error)}</Alert> : null;
+    return setup.isError ? <ErrorAlert error={setup.error} /> : null;
   }
   const view = setup.data;
   const edit = (patch: Partial<Settings>) => setDraft({ ...current, ...patch });
   const names = namesText ?? (current.launcherProcessNames ?? []).join(', ');
 
   const pick = async (field: DirField) => {
-    const dir = await open({ directory: true });
+    const dir = await pluginCall(() => open({ directory: true }));
     if (typeof dir === 'string') edit({ [field]: dir });
   };
 
@@ -166,7 +166,7 @@ export function SettingsScreen() {
           </Accordion.Panel>
         </Accordion.Item>
       </Accordion>
-      {save.isError && <Alert color="red">{errorMessage(t, save.error)}</Alert>}
+      {save.isError && <ErrorAlert error={save.error} />}
       <Group>
         <Button
           loading={save.isPending}

@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AnalysisView } from '../api/bindings/AnalysisView';
 import { checkUpdate, getSetup } from '../api/client';
-import { queryKeys, useAnalysisRunning, useAnalyze } from '../api/queries';
-import { errorMessage } from '../errors';
+import { queryKeys, useAnalysisError, useAnalysisRunning, useAnalyze } from '../api/queries';
+import { ErrorAlert } from '../components/ErrorAlert';
 import { detectLanguage } from '../i18n';
 import { CalibrationScreen } from '../screens/CalibrationScreen';
 import { ConflictsScreen } from '../screens/ConflictsScreen';
@@ -23,6 +23,7 @@ export function Shell() {
   const [chosen, setActive] = useState<ScreenId | null>(null);
   const analyze = useAnalyze();
   const { running: busy, progress } = useAnalysisRunning();
+  const analysisError = useAnalysisError();
   const started = useRef(false);
 
   const setup = useQuery({ queryKey: queryKeys.setup, queryFn: getSetup, retry: false });
@@ -66,19 +67,26 @@ export function Shell() {
   return (
     <AppShell navbar={{ width: 220, breakpoint: 0 }} padding="md">
       <AppShell.Navbar p="xs">
-        {screens.map((screen) => (
-          <NavLink
-            key={screen}
-            href={`#${screen}`}
-            label={t(`nav.${screen}`)}
-            active={active === screen}
-            disabled={needsAnalysis.includes(screen) && analysis === undefined}
-            onClick={(e) => {
-              e.preventDefault();
-              setActive(screen);
-            }}
-          />
-        ))}
+        {screens.map((screen) => {
+          const locked = needsAnalysis.includes(screen) && analysis === undefined;
+          return (
+            <NavLink
+              key={screen}
+              href={`#${screen}`}
+              label={t(`nav.${screen}`)}
+              active={active === screen}
+              disabled={locked}
+              aria-disabled={locked ? 'true' : undefined}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!locked) setActive(screen);
+              }}
+              onKeyDown={(e) => {
+                if (locked && (e.key === 'Enter' || e.key === ' ')) e.preventDefault();
+              }}
+            />
+          );
+        })}
       </AppShell.Navbar>
       <AppShell.Main>
         <Header
@@ -93,8 +101,8 @@ export function Shell() {
           {setupData && !setupData.launcherDbFound && (
             <Alert color="yellow">{t('setup.noLauncherDb')}</Alert>
           )}
-          {setup.isError && <Alert color="red">{errorMessage(t, setup.error)}</Alert>}
-          {analyze.isError && <Alert color="red">{errorMessage(t, analyze.error)}</Alert>}
+          {setup.isError && <ErrorAlert error={setup.error} />}
+          {analysisError != null && <ErrorAlert error={analysisError} />}
           {busy && (
             <div>
               <Text size="sm">{progressText}</Text>

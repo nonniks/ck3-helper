@@ -1,5 +1,4 @@
 import {
-  Alert,
   Chip,
   Group,
   Stack,
@@ -24,7 +23,7 @@ import { getSetup, searchConflicts } from '../api/client';
 import { queryKeys, useAnalysisRunning, useSetVanilla } from '../api/queries';
 import { ConflictList } from '../components/ConflictList';
 import { PairList } from '../components/PairList';
-import { errorMessage } from '../errors';
+import { ErrorAlert } from '../components/ErrorAlert';
 
 const VERDICTS: VerdictView[] = ['suspicious', 'intended', 'vanilla'];
 const LEVELS: LevelView[] = ['file', 'object', 'loc'];
@@ -52,7 +51,7 @@ function VanillaSwitch({ on }: { on: boolean }) {
           )}
         </div>
       </Tooltip>
-      {vanilla.isError && <Alert color="red">{errorMessage(t, vanilla.error)}</Alert>}
+      {vanilla.isError && <ErrorAlert error={vanilla.error} />}
     </Stack>
   );
 }

@@ -22,4 +22,8 @@ export async function initI18n(lang: Lang): Promise<void> {
   });
 }
 
+i18n.on('languageChanged', (lng) => {
+  document.documentElement.lang = lng;
+});
+
 export { i18n };

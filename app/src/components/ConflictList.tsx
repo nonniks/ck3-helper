@@ -1,11 +1,11 @@
-import { Alert, Loader, Paper, Stack, Text } from '@mantine/core';
+import { Loader, Paper, Stack, Text } from '@mantine/core';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ConflictView } from '../api/bindings/ConflictView';
 import type { Page } from '../api/bindings/Page';
-import { errorMessage } from '../errors';
+import { ErrorAlert } from './ErrorAlert';
 import { ConflictItem } from './ConflictItem';
 
 const PAGE_SIZE = 100;
@@ -68,7 +68,7 @@ export function ConflictList({
 
   if (query.isPending) return <Loader size="sm" />;
   if (query.isError && !query.data) {
-    return <Alert color="red">{errorMessage(t, query.error)}</Alert>;
+    return <ErrorAlert error={query.error} />;
   }
   if (total === 0) {
     return (
@@ -106,7 +106,7 @@ export function ConflictList({
           ))}
         </div>
       </div>
-      {isFetchNextPageError && <Alert color="red">{errorMessage(t, query.error)}</Alert>}
+      {isFetchNextPageError && <ErrorAlert error={query.error} />}
     </Stack>
   );
 }

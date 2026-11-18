@@ -1,11 +1,11 @@
-import { Alert, Button, Group, Modal, Stack, Text, Tooltip, VisuallyHidden } from '@mantine/core';
+import { Button, Group, Modal, Stack, Text, Tooltip, VisuallyHidden } from '@mantine/core';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PairView } from '../api/bindings/PairView';
 import { markIntended, summary } from '../api/client';
 import { queryKeys, useAnalysisRunning } from '../api/queries';
-import { errorMessage } from '../errors';
+import { ErrorAlert } from './ErrorAlert';
 
 /** «Задумано» for a suspicious pair of two mods: a rule «loser before winner» after a confirmation. */
 export function MarkIntendedButton({ pair }: { pair: PairView }) {
@@ -77,7 +77,7 @@ export function MarkIntendedButton({ pair }: { pair: PairView }) {
       >
         <Stack>
           <Text size="sm">{t('confirm.markIntended', names)}</Text>
-          {mark.isError && <Alert color="red">{errorMessage(t, mark.error)}</Alert>}
+          {mark.isError && <ErrorAlert error={mark.error} />}
           <Group justify="flex-end">
             <Button variant="default" onClick={() => setConfirming(false)}>
               {t('confirm.cancel')}

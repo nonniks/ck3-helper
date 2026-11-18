@@ -2,7 +2,7 @@ import { Drawer, Stack, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { modWarnings } from '../api/client';
-import { errorMessage } from '../errors';
+import { ErrorAlert } from './ErrorAlert';
 
 export function WarningsDrawer({
   modId,
@@ -28,7 +28,7 @@ export function WarningsDrawer({
       title={t('playset.warningsTitle', { name: modName })}
     >
       <Stack>
-        {warnings.isError && <Text c="red">{errorMessage(t, warnings.error)}</Text>}
+        {warnings.isError && <ErrorAlert error={warnings.error} />}
         {warnings.data?.length === 0 && <Text c="dimmed">{t('playset.warningsEmpty')}</Text>}
         {warnings.data?.map((w, i) => (
           <div key={`${w.file}:${i}`}>

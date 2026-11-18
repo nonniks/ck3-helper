@@ -1,5 +1,6 @@
 import { Alert, Anchor, Button, Group, Stack, Text } from '@mantine/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { pluginCall } from '../plugins';
 import { useTranslation } from 'react-i18next';
 import type { UpdateView } from '../api/bindings/UpdateView';
 
@@ -33,7 +34,7 @@ export function Header({ playsetName, busy, canRefresh, onRefresh, settingsError
               component="button"
               type="button"
               onClick={() => {
-                void openUrl(update.url);
+                void pluginCall(() => openUrl(update.url));
               }}
             >
               {t('update.open')}

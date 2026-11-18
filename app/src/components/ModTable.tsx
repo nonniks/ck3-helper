@@ -1,6 +1,7 @@
 import { Badge, Button, Group, Table, Text } from '@mantine/core';
 import { IconFolderOpen } from '@tabler/icons-react';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { pluginCall } from '../plugins';
 import { useTranslation } from 'react-i18next';
 import type { ModView } from '../api/bindings/ModView';
 
@@ -86,7 +87,7 @@ export function ModTable({
                   disabled={mod.missing}
                   aria-label={`${t('playset.openFolder')} — ${mod.name}`}
                   leftSection={<IconFolderOpen size={14} />}
-                  onClick={() => void revealItemInDir(mod.dir)}
+                  onClick={() => void pluginCall(() => revealItemInDir(mod.dir))}
                 >
                   {t('playset.openFolder')}
                 </Button>
