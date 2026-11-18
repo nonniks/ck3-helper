@@ -25,6 +25,7 @@ export function WarningsDrawer({
       onClose={onClose}
       position="right"
       size="lg"
+      closeButtonProps={{ 'aria-label': t('common.close') }}
       title={t('playset.warningsTitle', { name: modName })}
     >
       <Stack>

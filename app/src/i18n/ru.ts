@@ -124,6 +124,7 @@ export const ru = {
   },
   rules: {
     intendedNote: 'задумано: {{winner}} перекрывает {{loser}}',
+    removeSymbol: '×',
     unapplied: 'не применено',
     title: 'Правила порядка',
     empty: 'Правил пока нет.',
@@ -211,8 +212,13 @@ export const ru = {
     checkUpdates: 'Проверять обновления',
     advanced: 'Дополнительно',
     launcherProcessNames: 'Имена процесса лаунчера через запятую',
+    uiLangRu: 'Русский',
+    uiLangEn: 'English',
     launcherProcessNamesHint: 'Пусто: список по умолчанию',
     save: 'Сохранить',
+  },
+  common: {
+    close: 'Закрыть',
   },
   pluginError: 'Не удалось выполнить действие: {{detail}}',
   errorsPlain: {

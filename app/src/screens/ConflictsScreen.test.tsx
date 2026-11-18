@@ -63,6 +63,8 @@ const setup: SetupView = {
   userDir: '/u',
   gameDir: '/game',
   gameLanguage: 'english',
+  defaultUserDir: null,
+  defaultGameDir: null,
   launcherDbFound: true,
   appVersion: '0.1.0',
 };

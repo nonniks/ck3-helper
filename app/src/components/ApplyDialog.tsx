@@ -39,7 +39,12 @@ export function ApplyDialog({
   const done = save.data;
 
   return (
-    <Modal opened={opened} onClose={close} title={t('apply.dialogTitle')}>
+    <Modal
+      opened={opened}
+      onClose={close}
+      title={t('apply.dialogTitle')}
+      closeButtonProps={{ 'aria-label': t('common.close') }}
+    >
       {done ? (
         <Stack>
           <Text fw={600}>{t('apply.doneTitle', { name: done.newPlaysetName })}</Text>

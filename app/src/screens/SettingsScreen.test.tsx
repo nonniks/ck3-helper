@@ -31,6 +31,8 @@ const setup: SetupView = {
   userDir: '/detected/ck3',
   gameDir: null,
   gameLanguage: 'english',
+  defaultUserDir: '/detected/ck3',
+  defaultGameDir: '/detected/game',
   launcherDbFound: true,
   appVersion: '0.1.0',
 };
@@ -197,4 +199,36 @@ test('removing a rule asks for confirmation', async () => {
   await userEvent.click(await screen.findByRole('button', { name: ru.confirm.ok }));
   await screen.findByRole('button', { name: ru.rules.add });
   expect(invoked('remove_rule')).toEqual({ index: 3 });
+});
+
+test('removing a rule closes the dialog even if the summary cannot be refreshed', async () => {
+  let current = [{ index: 0, before: 'Base B', after: 'Base A', note: null, applied: true }];
+  handlers.rules = () => ({ ...noRules, rules: current });
+  handlers.remove_rule = () => {
+    current = [];
+    return { ...noRules, rules: [] };
+  };
+  handlers.summary = () => Promise.reject({ code: 'notAnalyzed', items: [] });
+  renderScreen();
+  await userEvent.click(
+    await screen.findByRole('button', {
+      name: i18n.t('rules.remove', { before: 'Base B', after: 'Base A' }),
+    }),
+  );
+  await userEvent.click(await screen.findByRole('button', { name: ru.confirm.ok }));
+  expect(await screen.findByText(ru.rules.empty)).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole('button', { name: ru.confirm.ok })).toBeNull());
+  expect(calls.filter(([c]) => c === 'remove_rule')).toHaveLength(1);
+});
+
+test('default button shows the detected folder, not the custom one', async () => {
+  handlers.get_setup = () => ({
+    ...setup,
+    settings: { ...settings, userDir: '/custom' },
+    userDir: '/custom',
+  });
+  renderScreen();
+  const defaults = await screen.findAllByRole('button', { name: ru.settings.useDefault });
+  await userEvent.click(defaults[0]);
+  expect(await screen.findByText(/\/detected\/ck3/)).toBeInTheDocument();
 });

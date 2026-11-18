@@ -43,6 +43,7 @@ function parseNames(text: string): string[] | null {
 }
 
 type DirField = 'userDir' | 'gameDir';
+const defaultKey = { userDir: 'defaultUserDir', gameDir: 'defaultGameDir' } as const;
 
 export function SettingsScreen() {
   const { t, i18n } = useTranslation();
@@ -98,10 +99,12 @@ export function SettingsScreen() {
         style={{ flex: 1 }}
         label={label}
         value={current[field] ?? ''}
-        placeholder={view[field] ?? t('settings.notFound')}
+        placeholder={view[defaultKey[field]] ?? t('settings.notFound')}
         description={
           current[field] === null
-            ? t('settings.usingDefault', { path: view[field] ?? t('settings.notFound') })
+            ? t('settings.usingDefault', {
+                path: view[defaultKey[field]] ?? t('settings.notFound'),
+              })
             : undefined
         }
         onChange={(e) => edit({ [field]: emptyToNull(e.currentTarget.value) })}
@@ -136,8 +139,8 @@ export function SettingsScreen() {
         allowDeselect={false}
         data={[
           { value: 'system', label: t('settings.uiLangSystem') },
-          { value: 'ru', label: 'Русский' },
-          { value: 'en', label: 'English' },
+          { value: 'ru', label: t('settings.uiLangRu') },
+          { value: 'en', label: t('settings.uiLangEn') },
         ]}
         value={current.uiLang ?? 'system'}
         onChange={(v) => edit({ uiLang: v === 'ru' || v === 'en' ? v : null })}

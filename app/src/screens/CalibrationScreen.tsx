@@ -13,7 +13,6 @@ import { useTranslation } from 'react-i18next';
 import type { CalibrationView } from '../api/bindings/CalibrationView';
 import { calibrate, getSetup, isAppError, type Progress } from '../api/client';
 import { queryKeys, useAnalysisRunning } from '../api/queries';
-import { errorMessage } from '../errors';
 import { ErrorAlert } from '../components/ErrorAlert';
 
 const LIMIT = 200;
@@ -94,13 +93,12 @@ export function CalibrationScreen({ onOpenSettings }: { onOpenSettings: () => vo
           <ProgressBar value={percent} animated />
         </div>
       )}
-      {run.isError && (
-        <Alert color={isAppError(run.error) && run.error.code === 'logNotFound' ? 'yellow' : 'red'}>
-          {isAppError(run.error) && run.error.code === 'logNotFound'
-            ? t('calibration.noLog')
-            : errorMessage(t, run.error)}
-        </Alert>
-      )}
+      {run.isError &&
+        (isAppError(run.error) && run.error.code === 'logNotFound' ? (
+          <Alert color="yellow">{t('calibration.noLog')}</Alert>
+        ) : (
+          <ErrorAlert error={run.error} />
+        ))}
       {result && setup.data.gameDir !== null && (
         <Stack>
           <Text fw={600}>

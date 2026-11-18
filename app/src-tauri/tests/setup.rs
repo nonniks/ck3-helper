@@ -121,6 +121,14 @@ fn setup_reports_db_and_effective_dirs() {
     assert!(s.launcher_db_found);
     assert_eq!(s.user_dir.as_deref(), Some(ud.to_str().unwrap()));
     assert_eq!(s.game_language.as_deref(), Some("l_english"));
+    assert_eq!(
+        s.default_user_dir,
+        ck3h_core::paths::default_user_dir().map(|p| p.display().to_string())
+    );
+    assert_eq!(
+        s.default_game_dir,
+        ck3h_core::paths::default_game_dir().map(|p| p.display().to_string())
+    );
 }
 
 #[test]

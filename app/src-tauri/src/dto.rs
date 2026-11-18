@@ -12,6 +12,9 @@ pub struct SetupView {
     pub user_dir: Option<String>,
     pub game_dir: Option<String>,
     pub game_language: Option<String>,
+    /// The detected platform defaults, shown when the setting is cleared.
+    pub default_user_dir: Option<String>,
+    pub default_game_dir: Option<String>,
     pub launcher_db_found: bool,
     pub app_version: String,
 }

@@ -3,8 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PairView } from '../api/bindings/PairView';
-import { markIntended, summary } from '../api/client';
-import { queryKeys, useAnalysisRunning } from '../api/queries';
+import { markIntended } from '../api/client';
+import { queryKeys, refreshAfterRuleEdit, useAnalysisRunning } from '../api/queries';
 import { ErrorAlert } from './ErrorAlert';
 
 /** «Задумано» for a suspicious pair of two mods: a rule «loser before winner» after a confirmation. */
@@ -17,21 +17,16 @@ export function MarkIntendedButton({ pair }: { pair: PairView }) {
   const names = { winner: pair.winner.name, loser: pair.loser.name };
 
   const mark = useMutation({
-    mutationFn: async () => {
-      await markIntended(
+    mutationFn: () =>
+      markIntended(
         pair.winner.id as string,
         pair.loser.id as string,
         t('rules.intendedNote', names),
-      );
-      return summary();
-    },
+      ),
     onSuccess: (view) => {
-      queryClient.setQueryData(queryKeys.summary, view);
-      for (const key of ['pair', 'search']) void queryClient.resetQueries({ queryKey: [key] });
-      for (const key of ['rules', 'proposal']) {
-        void queryClient.invalidateQueries({ queryKey: [key] });
-      }
+      queryClient.setQueryData(queryKeys.rules, view);
       setConfirming(false);
+      void refreshAfterRuleEdit(queryClient);
     },
   });
 
@@ -74,6 +69,7 @@ export function MarkIntendedButton({ pair }: { pair: PairView }) {
         opened={confirming}
         onClose={() => setConfirming(false)}
         title={t('confirm.markIntendedTitle')}
+        closeButtonProps={{ 'aria-label': t('common.close') }}
       >
         <Stack>
           <Text size="sm">{t('confirm.markIntended', names)}</Text>

@@ -81,6 +81,8 @@ impl AppState {
             game_language: user_dir.as_deref().and_then(game_language),
             user_dir: user_dir.map(|p| p.display().to_string()),
             game_dir: game_dir.map(|p| p.display().to_string()),
+            default_user_dir: default_user_dir().map(|p| p.display().to_string()),
+            default_game_dir: default_game_dir().map(|p| p.display().to_string()),
             settings_error: self
                 .settings_error
                 .lock()

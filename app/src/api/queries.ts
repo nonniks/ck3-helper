@@ -1,5 +1,11 @@
-import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { analyze, setVanilla, type Progress } from './client';
+import {
+  useIsMutating,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
+import { analyze, setVanilla, summary, type Progress } from './client';
 
 export const queryKeys = {
   setup: ['setup'] as const,
@@ -75,4 +81,20 @@ export function useAnalysisError(): unknown {
     queryFn: () => null,
     enabled: false,
   }).data;
+}
+
+/**
+ * After `rules.toml` changed: the analysis of the Rust side is recomputed (ruling R16). The edit
+ * already succeeded, so a failing `summary()` must not turn it into an error; the summary is only
+ * refreshed when there is one, and the next analysis replaces a stale one.
+ */
+export async function refreshAfterRuleEdit(queryClient: QueryClient): Promise<void> {
+  for (const key of ['pair', 'search']) void queryClient.resetQueries({ queryKey: [key] });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.proposal });
+  if (queryClient.getQueryData(queryKeys.summary) === undefined) return;
+  try {
+    queryClient.setQueryData(queryKeys.summary, await summary());
+  } catch {
+    // the rule edit is already saved; keep the previous summary
+  }
 }

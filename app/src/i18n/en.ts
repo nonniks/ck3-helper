@@ -118,6 +118,7 @@ export const en = {
   },
   rules: {
     intendedNote: 'intended: {{winner}} overrides {{loser}}',
+    removeSymbol: '×',
     unapplied: 'not applied',
     title: 'Order rules',
     empty: 'No rules yet.',
@@ -206,8 +207,13 @@ export const en = {
     checkUpdates: 'Check for updates',
     advanced: 'Advanced',
     launcherProcessNames: 'Launcher process names, comma-separated',
+    uiLangRu: 'Русский',
+    uiLangEn: 'English',
     launcherProcessNamesHint: 'Empty: the default list',
     save: 'Save',
+  },
+  common: {
+    close: 'Close',
   },
   pluginError: 'The action failed: {{detail}}',
   errorsPlain: {

@@ -15,8 +15,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AnalysisView } from '../api/bindings/AnalysisView';
 import type { RuleView } from '../api/bindings/RuleView';
-import { addRule, removeRule, rules, summary } from '../api/client';
-import { queryKeys, useAnalysisRunning } from '../api/queries';
+import { addRule, removeRule, rules } from '../api/client';
+import { queryKeys, refreshAfterRuleEdit, useAnalysisRunning } from '../api/queries';
 import { ErrorAlert } from './ErrorAlert';
 
 export function RulesEditor() {
@@ -35,31 +35,24 @@ export function RulesEditor() {
     enabled: false,
   }).data;
 
-  const refresh = async () => {
-    queryClient.setQueryData(queryKeys.summary, await summary());
-    for (const key of ['pair', 'search']) void queryClient.resetQueries({ queryKey: [key] });
-    for (const key of ['rules', 'proposal']) {
-      void queryClient.invalidateQueries({ queryKey: [key] });
-    }
-  };
-
   const add = useMutation({
-    mutationFn: async (rule: { before: string; after: string; note: string }) => {
-      await addRule(rule.before, rule.after, rule.note || null);
-      await refresh();
-    },
-    onSuccess: () => {
+    mutationFn: (rule: { before: string; after: string; note: string }) =>
+      addRule(rule.before, rule.after, rule.note || null),
+    onSuccess: (view) => {
+      queryClient.setQueryData(queryKeys.rules, view);
       setBefore(null);
       setAfter(null);
       setNote('');
+      void refreshAfterRuleEdit(queryClient);
     },
   });
   const remove = useMutation({
-    mutationFn: async (index: number) => {
-      await removeRule(index);
-      await refresh();
+    mutationFn: (index: number) => removeRule(index),
+    onSuccess: (view) => {
+      queryClient.setQueryData(queryKeys.rules, view);
+      setRemoving(null);
+      void refreshAfterRuleEdit(queryClient);
     },
-    onSuccess: () => setRemoving(null),
   });
 
   const view = rulesQuery.data;
@@ -103,7 +96,7 @@ export function RulesEditor() {
               setRemoving(rule);
             }}
           >
-            ×
+            {t('rules.removeSymbol')}
           </Button>
         </Group>
       ))}
@@ -144,6 +137,7 @@ export function RulesEditor() {
         opened={removing !== null}
         onClose={() => setRemoving(null)}
         title={t('rules.removeTitle')}
+        closeButtonProps={{ 'aria-label': t('common.close') }}
       >
         <Stack>
           <Text size="sm">
