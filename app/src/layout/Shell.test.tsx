@@ -63,6 +63,28 @@ test('update banner links to the release', async () => {
   expect(await screen.findByText(/0\.2\.0/)).toBeInTheDocument();
 });
 
+test('a broken rules file is shown app-wide, outside settings', async () => {
+  mockIPC((cmd) => {
+    if (cmd === 'get_setup') return setup;
+    if (cmd === 'list_playsets') return [];
+    if (cmd === 'analyze')
+      return {
+        playset: { id: 'p1', name: 'Main', active: true, mods: 0, enabled: 0 },
+        lang: 'english',
+        vanilla: false,
+        mods: [],
+        counts: { suspicious: 0, intended: 0, vanilla: 0, files: 0, objects: 0, loc: 0 },
+        pairs: [],
+        rulesError: 'expected `=` at line 3',
+      };
+    return null;
+  });
+  render(<App />);
+  expect(
+    await screen.findByText(ru.banner.rulesError.replace('{{detail}}', 'expected `=` at line 3')),
+  ).toBeInTheDocument();
+});
+
 test('analysis started from the playset list shows shared progress and disables refresh', async () => {
   const user = userEvent.setup();
   const first = {

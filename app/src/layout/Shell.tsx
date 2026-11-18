@@ -103,6 +103,9 @@ export function Shell() {
           )}
           {setup.isError && <ErrorAlert error={setup.error} />}
           {analysisError != null && <ErrorAlert error={analysisError} />}
+          {analysis?.rulesError != null && (
+            <Alert color="yellow">{t('banner.rulesError', { detail: analysis.rulesError })}</Alert>
+          )}
           {busy && (
             <div>
               <Text size="sm">{progressText}</Text>

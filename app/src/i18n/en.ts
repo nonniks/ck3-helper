@@ -29,6 +29,7 @@ export const en = {
   },
   banner: {
     settingsError: 'Settings could not be read, defaults are used: {{detail}}',
+    rulesError: 'The rules file cannot be read, the analysis runs without rules: {{detail}}',
   },
   update: {
     available: 'Version {{version}} is available',

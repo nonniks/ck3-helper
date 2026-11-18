@@ -29,6 +29,7 @@ export const ru = {
   },
   banner: {
     settingsError: 'Настройки не прочитаны, используются значения по умолчанию: {{detail}}',
+    rulesError: 'Файл правил не читается, анализ идёт без правил: {{detail}}',
   },
   update: {
     available: 'Доступна версия {{version}}',
