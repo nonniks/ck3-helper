@@ -9,6 +9,7 @@ pub mod index;
 pub mod launcher;
 pub mod paths;
 pub mod playset;
+pub mod session;
 pub mod sort;
 #[cfg(feature = "testkit")]
 pub mod testkit;

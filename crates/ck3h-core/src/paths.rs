@@ -12,6 +12,14 @@ pub fn default_user_dir() -> Option<PathBuf> {
     base.map(|b| b.join(USER_DIR_SUFFIX))
 }
 
+/// Folder for this tool's own files (`<config>/ck3-helper`), if the config directory is known.
+pub fn config_dir() -> Option<PathBuf> {
+    dirs::config_dir().map(|d| d.join("ck3-helper"))
+}
+
+/// Name of the load-order rules file inside `config_dir()`.
+pub const RULES_FILE: &str = "rules.toml";
+
 /// `candidate` if it looks like a CK3 `game` folder (has `common/`).
 pub fn game_dir_if_valid(candidate: &Path) -> Option<PathBuf> {
     candidate

@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -8,6 +9,12 @@ pub enum CoreError {
     Db(#[from] rusqlite::Error),
     #[error("unexpected launcher schema: missing {table}.{column}")]
     Schema { table: String, column: String },
+    #[error("launcher database not found: {}", .0.display())]
+    LauncherDbNotFound(PathBuf),
+    #[error("not a CK3 game folder (no common/): {}", .0.display())]
+    NotGameDir(PathBuf),
+    #[error("log not found: {}", .0.display())]
+    LogNotFound(PathBuf),
     #[error("playset not found: {0}")]
     PlaysetNotFound(String),
     #[error("no active playset")]

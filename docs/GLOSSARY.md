@@ -17,3 +17,4 @@
 | replace-папка | `is_replace` | `localization/replace/…` или `localization/<язык>/replace/…`: ключ перебивает обычный |
 | Правило порядка | `Rule` | «A раньше B» из `rules.toml` |
 | Калибровка | `calibrate` | Сверка нашего прогноза победителей с `database_conflicts.log` игры |
+| Сессия | `session` | Загрузка плейсета (и лога конфликтов игры) для анализа; общая для CLI и приложения |

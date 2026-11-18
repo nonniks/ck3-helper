@@ -7,6 +7,7 @@ use crate::launcher::{LauncherDb, Playset, PlaysetMod};
 use rayon::prelude::*;
 use serde::Serialize;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ModEntry {
@@ -28,11 +29,31 @@ pub fn load_playset(
     playset: &Playset,
     lang: &str,
 ) -> Result<Vec<ModEntry>, CoreError> {
-    let mods = db.playset_mods(&playset.id)?;
-    mods.par_iter().map(|m| load_mod(m, lang)).collect()
+    load_playset_with_progress(db, playset, lang, &|_, _| {})
 }
 
-fn load_mod(m: &PlaysetMod, lang: &str) -> Result<ModEntry, CoreError> {
+/// Like `load_playset`; `progress(done, total)` is called after each mod, in any order
+/// (mods load in parallel).
+pub fn load_playset_with_progress(
+    db: &LauncherDb,
+    playset: &Playset,
+    lang: &str,
+    progress: &(dyn Fn(usize, usize) + Sync),
+) -> Result<Vec<ModEntry>, CoreError> {
+    let mods = db.playset_mods(&playset.id)?;
+    let total = mods.len();
+    let done = AtomicUsize::new(0);
+    Ok(mods
+        .par_iter()
+        .map(|m| {
+            let entry = load_mod(m, lang);
+            progress(done.fetch_add(1, Ordering::Relaxed) + 1, total);
+            entry
+        })
+        .collect())
+}
+
+fn load_mod(m: &PlaysetMod, lang: &str) -> ModEntry {
     let missing = m.dir_path.as_os_str().is_empty() || !m.dir_path.is_dir();
     let mut entry = ModEntry {
         id: m.mod_id.clone(),
@@ -46,7 +67,7 @@ fn load_mod(m: &PlaysetMod, lang: &str) -> Result<ModEntry, CoreError> {
         missing,
     };
     if missing {
-        return Ok(entry);
+        return entry;
     }
     let descriptor_error = match read_descriptor(&m.dir_path) {
         Ok(d) => {
@@ -67,7 +88,7 @@ fn load_mod(m: &PlaysetMod, lang: &str) -> Result<ModEntry, CoreError> {
                     }],
                     ..ModIndex::default()
                 });
-                return Ok(entry);
+                return entry;
             }
         };
         if let Some(e) = descriptor_error {
@@ -79,5 +100,5 @@ fn load_mod(m: &PlaysetMod, lang: &str) -> Result<ModEntry, CoreError> {
         }
         entry.index = Some(index);
     }
-    Ok(entry)
+    entry
 }

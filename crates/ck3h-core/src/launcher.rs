@@ -90,6 +90,13 @@ impl LauncherDb {
         .ok_or_else(|| CoreError::PlaysetNotFound(name.to_string()))
     }
 
+    pub fn playset_by_id(&self, id: &str) -> Result<Playset, CoreError> {
+        self.query_playsets("WHERE COALESCE(isRemoved, 0) = 0 AND id = ?1", [id])?
+            .into_iter()
+            .next()
+            .ok_or_else(|| CoreError::PlaysetNotFound(id.to_string()))
+    }
+
     pub fn playset_mods(&self, playset_id: &str) -> Result<Vec<PlaysetMod>, CoreError> {
         let mut stmt = self.conn.prepare(
             "SELECT m.id, COALESCE(m.displayName, m.name, ''), m.steamId, m.source,

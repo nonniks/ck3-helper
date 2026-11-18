@@ -1,16 +1,19 @@
 //! `ck3h`: a thin command-line layer over `ck3h-core` (spec §4.7).
 
 use ck3h_core::apply::{ApplyResult, DEFAULT_LAUNCHER_PROCESS_NAMES, apply_order};
-use ck3h_core::calibrate::{CalibrationReport, calibrate, check_last_run, parse_conflicts_log};
+use ck3h_core::calibrate::{CalibrationReport, calibrate, check_last_run};
 use ck3h_core::conflicts::{
     ConflictLevel, ConflictReport, Contender, Source, Verdict, WinReason, analyze,
 };
 use ck3h_core::deps::{DepIssueKind, build_dep_graph};
 use ck3h_core::error::CoreError;
-use ck3h_core::index::{ModIndex, index_vanilla};
-use ck3h_core::launcher::{LAUNCHER_DB_FILE, LauncherDb, Playset};
-use ck3h_core::paths::{default_game_dir, default_user_dir, game_dir_if_valid, game_language};
-use ck3h_core::playset::{ModEntry, load_playset};
+use ck3h_core::index::ModIndex;
+use ck3h_core::launcher::Playset;
+use ck3h_core::paths::{RULES_FILE, config_dir, default_game_dir, default_user_dir};
+use ck3h_core::playset::ModEntry;
+use ck3h_core::session::{
+    PlaysetSelector, analysis_lang, launcher_db, load_vanilla, read_conflicts_log,
+};
 use ck3h_core::sort::{MoveReason, SortProposal, load_rules, propose};
 use clap::{Parser, Subcommand};
 use serde::Serialize;
@@ -183,43 +186,22 @@ struct Loaded {
     vanilla: Option<ModIndex>,
 }
 
-fn valid_game_dir(path: &Path) -> Result<PathBuf, Failure> {
-    game_dir_if_valid(path).ok_or_else(|| {
-        Failure::Message(format!(
-            "not a CK3 game folder (no common/): {}",
-            path.display()
-        ))
-    })
-}
-
 fn load(user_dir: &Path, target: &Target) -> Result<Loaded, Failure> {
-    let db_path = user_dir.join(LAUNCHER_DB_FILE);
-    if !db_path.is_file() {
-        return Err(Failure::Message(format!(
-            "launcher database not found: {}",
-            db_path.display()
-        )));
-    }
-    let db = LauncherDb::open_read_only(&db_path)?;
-    let playset = match &target.playset {
-        Some(name) => db.playset_by_name(name)?,
-        None => db.active_playset()?,
+    let selector = match &target.playset {
+        Some(name) => PlaysetSelector::ByName(name.clone()),
+        None => PlaysetSelector::Active,
     };
-    let lang = target
-        .lang
-        .clone()
-        .or_else(|| game_language(user_dir))
-        .unwrap_or_else(|| "l_english".to_string());
-    let mods = load_playset(&db, &playset, &lang)?;
+    let lang = analysis_lang(user_dir, target.lang.as_deref());
+    let loaded = ck3h_core::session::load(user_dir, &selector, &lang, &|_, _| {})?;
     let vanilla = target
         .game
         .as_deref()
-        .map(|g| index_vanilla(&valid_game_dir(g)?, &lang).map_err(Failure::from))
+        .map(|g| load_vanilla(g, &lang))
         .transpose()?;
     Ok(Loaded {
-        db_path,
-        playset,
-        mods,
+        db_path: loaded.db_path,
+        playset: loaded.playset,
+        mods: loaded.mods,
         vanilla,
     })
 }
@@ -244,14 +226,7 @@ struct PlaysetRow {
 }
 
 fn playsets(out: &mut impl Write, user_dir: &Path, json: bool) -> Outcome {
-    let db_path = user_dir.join(LAUNCHER_DB_FILE);
-    if !db_path.is_file() {
-        return Err(Failure::Message(format!(
-            "launcher database not found: {}",
-            db_path.display()
-        )));
-    }
-    let db = LauncherDb::open_read_only(&db_path)?;
+    let (_, db) = launcher_db(user_dir)?;
     let mut rows = Vec::new();
     for p in db.playsets()? {
         let mods = db.playset_mods(&p.id)?;
@@ -439,8 +414,8 @@ fn sort(
         }
         Some(path) => load_rules(&path)?,
         // The default location may be absent; `load_rules` then means "no rules".
-        None => match dirs::config_dir() {
-            Some(d) => load_rules(&d.join("ck3-helper").join("rules.toml"))?,
+        None => match config_dir() {
+            Some(d) => load_rules(&d.join(RULES_FILE))?,
             None => Vec::new(),
         },
     };
@@ -594,17 +569,9 @@ fn calibrate_cmd(out: &mut impl Write, user_dir: &Path, target: &Target, json: b
         game: Some(game),
     };
     let l = load(user_dir, &target)?;
-    let log_path = user_dir.join("logs").join("database_conflicts.log");
-    let bytes = std::fs::read(&log_path)
-        .map_err(|e| Failure::Message(format!("{}: {e}", log_path.display())))?;
-    let (text, _) = ck3h_core::text::decode(&bytes);
+    let log = read_conflicts_log(user_dir)?;
     let run_check = check_last_run(user_dir, &l.mods);
-    let report = calibrate(
-        &parse_conflicts_log(&text),
-        &l.mods,
-        l.vanilla.as_ref(),
-        run_check,
-    );
+    let report = calibrate(&log, &l.mods, l.vanilla.as_ref(), run_check);
     if json {
         return print_json(out, &report);
     }
