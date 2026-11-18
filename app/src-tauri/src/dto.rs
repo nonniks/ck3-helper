@@ -358,3 +358,59 @@ pub struct ApplyView {
     pub new_playset_name: String,
     pub backup_path: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct MismatchView {
+    pub database: String,
+    pub key: String,
+    pub log_file: String,
+    pub predicted_file: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct DatabaseCount {
+    pub database: String,
+    pub count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ObjectRef {
+    pub database: String,
+    pub key: String,
+}
+
+/// `notInLastRun` holds mod names; `onlyInLastRun` what the last launch had instead.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct LastRunView {
+    pub not_in_last_run: Vec<String>,
+    pub only_in_last_run: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct CalibrationView {
+    pub matched: usize,
+    pub mismatched: Vec<MismatchView>,
+    pub log_unknown: Vec<DatabaseCount>,
+    pub logged_single_definition: Vec<DatabaseCount>,
+    pub predicted_not_logged: Vec<ObjectRef>,
+    pub truncated: bool,
+    pub last_run: Option<LastRunView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct UpdateView {
+    pub version: String,
+    pub url: String,
+}

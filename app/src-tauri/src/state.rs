@@ -1,13 +1,16 @@
 use crate::analysis::{Analysis, VanillaIndex, matches};
 use crate::dto::{
-    AnalysisView, ApplyPreviewView, ApplyView, ConflictQuery, ConflictView, IndexWarningView,
-    LauncherStatus, Page, PlaysetRow, Progress, ProposalView, RuleView, RulesView, SetupView,
+    AnalysisView, ApplyPreviewView, ApplyView, CalibrationView, ConflictQuery, ConflictView,
+    DatabaseCount, IndexWarningView, LastRunView, LauncherStatus, MismatchView, ObjectRef, Page,
+    PlaysetRow, Progress, ProposalView, RuleView, RulesView, SetupView, UpdateView,
 };
 use crate::error::{AppError, ErrorCode};
 use crate::order::proposal_view;
 use crate::rules_file::{append_rule, remove_rule};
 use crate::settings::{Settings, SettingsFile, load_settings, save_settings};
+use crate::update;
 use ck3h_core::apply::{DEFAULT_LAUNCHER_PROCESS_NAMES, apply_order, launcher_processes, preview};
+use ck3h_core::calibrate::{calibrate, check_last_run};
 use ck3h_core::conflicts::{Source, involves};
 use ck3h_core::error::CoreError;
 use ck3h_core::index::ModIndex;
@@ -15,6 +18,7 @@ use ck3h_core::launcher::LAUNCHER_DB_FILE;
 use ck3h_core::paths::{RULES_FILE, default_game_dir, default_user_dir, game_language};
 use ck3h_core::session::{
     PlaysetSelector, analysis_lang, launcher_db, load, load_vanilla, playset_unchanged,
+    read_conflicts_log,
 };
 use ck3h_core::sort::{Rule, load_rules, propose};
 use std::path::{Path, PathBuf};
@@ -389,6 +393,79 @@ impl AppState {
             new_playset_name: result.new_playset_name,
             backup_path: result.backup_path.display().to_string(),
         })
+    }
+
+    /// Compares the current analysis with the game's `database_conflicts.log`. Vanilla is indexed
+    /// as in `set_vanilla` whatever the setting says; the report is computed under both locks.
+    pub fn calibrate(
+        &self,
+        progress: &(dyn Fn(Progress) + Sync),
+    ) -> Result<CalibrationView, AppError> {
+        let lang = self.with_analysis(|a, _| a.loaded.lang.clone())?;
+        self.ensure_vanilla(&lang, progress)?;
+        let log = read_conflicts_log(&self.user_dir()?)?;
+        let analysis = lock(&self.analysis);
+        let a = analysis.as_ref().ok_or_else(not_analyzed)?;
+        let vanilla = lock(&self.vanilla);
+        let mods = &a.loaded.mods;
+        let run_check = check_last_run(&self.user_dir()?, mods);
+        let report = calibrate(&log, mods, vanilla.as_ref().map(|v| &v.index), run_check);
+        let counts = |m: std::collections::BTreeMap<String, usize>| {
+            m.into_iter()
+                .map(|(database, count)| DatabaseCount { database, count })
+                .collect()
+        };
+        Ok(CalibrationView {
+            matched: report.matched,
+            mismatched: report
+                .mismatched
+                .into_iter()
+                .map(|m| MismatchView {
+                    database: m.database,
+                    key: m.key,
+                    log_file: m.log_file,
+                    predicted_file: m.predicted_file,
+                })
+                .collect(),
+            log_unknown: counts(report.log_unknown),
+            logged_single_definition: counts(report.logged_single_definition),
+            predicted_not_logged: report
+                .predicted_not_logged
+                .into_iter()
+                .map(|(database, key)| ObjectRef { database, key })
+                .collect(),
+            truncated: report.truncated,
+            last_run: report.run_check.map(|r| LastRunView {
+                not_in_last_run: r
+                    .not_in_last_run
+                    .iter()
+                    .map(|id| {
+                        mods.iter()
+                            .find(|m| &m.id == id)
+                            .map_or_else(|| id.clone(), |m| m.name.clone())
+                    })
+                    .collect(),
+                only_in_last_run: r.only_in_last_run,
+            }),
+        })
+    }
+
+    /// The once-a-day release check. Not due, or no repository URL yet: `None`, no request and
+    /// no settings write. Otherwise the day is recorded whatever the outcome; errors are silent.
+    /// Recording it does not reset the analysis (only folder or language changes do).
+    pub fn check_update(&self, now: i64) -> Option<UpdateView> {
+        let settings = self.settings();
+        if !update::due(&settings, now) {
+            return None;
+        }
+        let api = update::releases_api(env!("CARGO_PKG_REPOSITORY"))?;
+        let found = update::fetch_latest(&api, env!("CARGO_PKG_VERSION"))
+            .ok()
+            .flatten();
+        let mut settings = self.settings();
+        settings.update_checked_at = Some(now);
+        let _ = self.save_settings(settings);
+        found
     }
 
     /// Runs `f` on the current analysis and, when it includes vanilla, the vanilla index.

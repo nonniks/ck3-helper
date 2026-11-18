@@ -6,6 +6,7 @@ pub mod order;
 pub mod rules_file;
 pub mod settings;
 pub mod state;
+pub mod update;
 
 use ck3h_core::paths::config_dir;
 use state::AppState;
@@ -35,7 +36,9 @@ pub fn run() {
             commands::propose,
             commands::launcher_status,
             commands::apply_preview,
-            commands::apply
+            commands::apply,
+            commands::calibrate,
+            commands::check_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running CK3 Helper");

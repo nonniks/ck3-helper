@@ -1,6 +1,7 @@
 use crate::dto::{
-    AnalysisView, ApplyPreviewView, ApplyView, ConflictQuery, ConflictView, IndexWarningView,
-    LauncherStatus, Page, PlaysetRow, Progress, ProposalView, RulesView, SetupView,
+    AnalysisView, ApplyPreviewView, ApplyView, CalibrationView, ConflictQuery, ConflictView,
+    IndexWarningView, LauncherStatus, Page, PlaysetRow, Progress, ProposalView, RulesView,
+    SetupView, UpdateView,
 };
 use crate::error::{AppError, ErrorCode};
 use crate::settings::Settings;
@@ -161,4 +162,29 @@ pub async fn apply_preview(state: State<'_, AppState>) -> Result<ApplyPreviewVie
 #[tauri::command]
 pub async fn apply(app: AppHandle) -> Result<ApplyView, AppError> {
     blocking(move || app.state::<AppState>().apply(chrono::Local::now())).await
+}
+
+#[tauri::command]
+pub async fn calibrate(
+    app: AppHandle,
+    on_progress: Channel<Progress>,
+) -> Result<CalibrationView, AppError> {
+    blocking(move || {
+        app.state::<AppState>().calibrate(&|p| {
+            let _ = on_progress.send(p);
+        })
+    })
+    .await
+}
+
+/// The request runs on the blocking pool; a failed task is the same as no update.
+#[tauri::command]
+pub async fn check_update(app: AppHandle) -> Option<UpdateView> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64);
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().check_update(now))
+        .await
+        .ok()
+        .flatten()
 }
