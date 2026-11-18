@@ -27,7 +27,7 @@ beforeEach(async () => {
   await initI18n('ru');
 });
 
-test('a failed re-analysis is shown app-wide with detail, disables screens, and clears on success', async () => {
+test('a failed header refresh shows the error with detail and keeps the analysis and screens', async () => {
   const results: unknown[] = [analysis, { code: 'io', items: [], detail: 'disk full' }, analysis];
   mockIPC((cmd) => {
     if (cmd === 'get_setup') return setup;
@@ -48,8 +48,78 @@ test('a failed re-analysis is shown app-wide with detail, disables screens, and 
   expect(await screen.findByText(ru.errorsPlain.io)).toBeInTheDocument();
   expect(screen.getByText('disk full')).toBeInTheDocument();
   expect(screen.queryByText(/ввода-вывода: $/)).toBeNull();
+  expect(screen.getByRole('link', { name: 'Конфликты' })).not.toHaveAttribute('data-disabled');
+  expect(screen.getByRole('button', { name: ru.header.refresh })).toBeEnabled();
+});
+
+test('a failed re-analysis after a folder change in settings disables the analysis screens', async () => {
+  const fullSetup = {
+    ...setup,
+    settings: {
+      userDir: null,
+      gameDir: null,
+      analysisLang: null,
+      uiLang: null,
+      showVanilla: false,
+      checkUpdates: true,
+      launcherProcessNames: null,
+      updateCheckedAt: null,
+    },
+    userDir: '/u',
+    gameDir: null,
+    gameLanguage: null,
+  };
+  let analyses = 0;
+  mockIPC((cmd, args) => {
+    if (cmd === 'get_setup') return fullSetup;
+    if (cmd === 'save_settings')
+      return { ...fullSetup, settings: (args as { settings: object }).settings };
+    if (cmd === 'list_playsets' || cmd === 'rules')
+      return cmd === 'rules' ? { path: '', error: null, rules: [] } : [];
+    if (cmd === 'analyze') {
+      return analyses++ === 0
+        ? analysis
+        : Promise.reject({ code: 'io', items: [], detail: 'gone' });
+    }
+    return null;
+  });
+  const user = userEvent.setup();
+  render(<App />);
+  const refresh = await screen.findByRole('button', { name: ru.header.refresh });
+  await waitFor(() => expect(refresh).toBeEnabled());
+  await user.click(screen.getByRole('link', { name: 'Настройки' }));
+  await user.type(
+    await screen.findByRole('combobox', { name: ru.settings.analysisLang }),
+    'l_russian',
+  );
+  await user.click(await screen.findByRole('button', { name: ru.settings.save }));
+  expect(await screen.findByText('gone')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Конфликты' })).toHaveAttribute('data-disabled', 'true');
-  expect(screen.getByRole('button', { name: ru.header.refresh })).toBeDisabled();
+});
+
+test('Enter on a playset while an analysis runs does not start another one', async () => {
+  let analyses = 0;
+  mockIPC((cmd) => {
+    if (cmd === 'get_setup') return setup;
+    if (cmd === 'list_playsets')
+      return [
+        { id: 'p', name: 'Первый', active: true, mods: 0, enabled: 0 },
+        { id: 'q', name: 'Второй', active: false, mods: 0, enabled: 0 },
+      ];
+    if (cmd === 'analyze') {
+      analyses++;
+      return new Promise(() => {});
+    }
+    return null;
+  });
+  const user = userEvent.setup();
+  render(<App />);
+  const other = await screen.findByText('Второй');
+  const control = other.closest('[aria-disabled]') as HTMLElement;
+  expect(control).not.toBeNull();
+  control.focus();
+  await user.keyboard('{Enter}');
+  expect(analyses).toBe(1);
 });
 
 test('a later successful analysis clears the startup error', async () => {

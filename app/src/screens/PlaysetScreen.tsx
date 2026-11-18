@@ -51,12 +51,14 @@ export function PlaysetScreen() {
             label={p.name}
             active={analysis?.playset.id === p.id}
             disabled={running}
+            aria-disabled={running || undefined}
             leftSection={
               p.active ? (
                 <IconCircleCheck size={16} aria-label={t('playset.activeInLauncher')} />
               ) : undefined
             }
             onClick={() => {
+              if (running) return;
               if (analysis?.playset.id !== p.id) analyze.mutate({ playsetId: p.id });
             }}
           />

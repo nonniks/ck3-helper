@@ -1,6 +1,6 @@
 import { MantineProvider } from '@mantine/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { mockIPC } from '@tauri-apps/api/mocks';
 import { beforeEach, expect, test, vi } from 'vitest';
@@ -145,6 +145,19 @@ test('changed playset offers to recalculate', async () => {
   await waitFor(() =>
     expect(invoked('analyze')).toEqual(expect.objectContaining({ playsetId: 'main-id' })),
   );
+});
+
+test('a failed recalculation is shown inside the dialog with its detail', async () => {
+  handlers.apply = () => Promise.reject({ code: 'playsetChanged', items: [], detail: '' });
+  handlers.analyze = () => Promise.reject({ code: 'io', items: [], detail: 'disk full' });
+  const user = userEvent.setup();
+  renderScreen();
+  await user.click(await saveButton());
+  await user.click(await screen.findByRole('button', { name: ru.apply.confirm }));
+  await user.click(await screen.findByRole('button', { name: ru.apply.recalculate }));
+  const dialog = await screen.findByRole('dialog');
+  expect(await within(dialog).findByText('disk full')).toBeInTheDocument();
+  expect(within(dialog).getByText(ru.errorsPlain.io)).toBeInTheDocument();
 });
 
 test('user rule reason shows side and note', async () => {

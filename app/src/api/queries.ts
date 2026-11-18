@@ -36,8 +36,7 @@ export function useAnalyze() {
       }
     },
     onError: (error) => {
-      // The Rust side dropped the previous analysis, so it must not look current.
-      void queryClient.resetQueries({ queryKey: queryKeys.summary });
+      // Rust keeps the previous analysis after a failed analyze, so `summary` stays.
       queryClient.setQueryData(queryKeys.analysisError, error);
     },
     onSettled: () => queryClient.removeQueries({ queryKey: queryKeys.analysisProgress }),

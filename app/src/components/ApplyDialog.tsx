@@ -4,7 +4,7 @@ import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { pluginCall } from '../plugins';
 import { useTranslation } from 'react-i18next';
 import { apply, applyPreview, isAppError } from '../api/client';
-import { queryKeys, useAnalysisError, useAnalyze } from '../api/queries';
+import { queryKeys, useAnalyze } from '../api/queries';
 import { ErrorAlert } from './ErrorAlert';
 
 export function ApplyDialog({
@@ -26,7 +26,6 @@ export function ApplyDialog({
     retry: false,
   });
   const analyze = useAnalyze();
-  const analysisError = useAnalysisError();
   const save = useMutation({
     mutationFn: apply,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.proposal }),
@@ -49,7 +48,6 @@ export function ApplyDialog({
         <Stack>
           <Text fw={600}>{t('apply.doneTitle', { name: done.newPlaysetName })}</Text>
           <Text size="sm">{t('apply.pickInLauncher')}</Text>
-          {changed && analysisError != null && <ErrorAlert error={analysisError} />}
           <Group justify="flex-end">
             <Button
               variant="default"
@@ -82,6 +80,7 @@ export function ApplyDialog({
             </>
           )}
           {save.isError && <ErrorAlert error={save.error} />}
+          {changed && analyze.isError && <ErrorAlert error={analyze.error} />}
           <Group justify="flex-end">
             <Button variant="default" onClick={close}>
               {t('apply.cancel')}

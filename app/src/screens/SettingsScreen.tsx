@@ -73,6 +73,14 @@ export function SettingsScreen() {
       if (next.uiLang !== before?.uiLang) {
         void i18n.changeLanguage(detectLanguage(view.settings.uiLang, navigator.language));
       }
+      if (
+        next.userDir !== before?.userDir ||
+        next.analysisLang !== before?.analysisLang ||
+        next.gameDir !== before?.gameDir
+      ) {
+        // Rust drops the analysis on exactly these changes.
+        void queryClient.resetQueries({ queryKey: queryKeys.summary });
+      }
       if (next.userDir !== before?.userDir) {
         analyze.mutate({ playsetId: null });
       } else if (next.analysisLang !== before?.analysisLang || next.gameDir !== before?.gameDir) {
