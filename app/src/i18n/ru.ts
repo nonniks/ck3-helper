@@ -6,4 +6,60 @@ export const ru = {
     calibration: 'Сверка',
     settings: 'Настройки',
   },
+  screens: {
+    playset: 'Плейсет',
+    conflicts: 'Конфликты',
+    order: 'Порядок',
+    calibration: 'Сверка с игрой',
+    settings: 'Настройки',
+  },
+  header: {
+    refresh: 'Обновить',
+    noPlayset: 'Плейсет не выбран',
+  },
+  setup: {
+    noLauncherDb:
+      'База Paradox Launcher не найдена в папке по умолчанию. Укажите папку пользователя CK3 в настройках.',
+  },
+  progress: {
+    mods: 'Мод {{done}} из {{total}}',
+    vanilla: 'Индексирую игру',
+    conflicts: 'Ищу конфликты',
+    starting: 'Запуск анализа',
+  },
+  banner: {
+    settingsError: 'Настройки не прочитаны, используются значения по умолчанию: {{detail}}',
+  },
+  update: {
+    available: 'Доступна версия {{version}}',
+    open: 'Открыть страницу релиза',
+  },
+  counts: {
+    objects_one: '{{count}} объект',
+    objects_few: '{{count}} объекта',
+    objects_many: '{{count}} объектов',
+    objects_other: '{{count}} объекта',
+  },
+  errors: {
+    unknown: 'Что-то пошло не так.',
+    noUserDir: 'Папка пользователя CK3 не найдена. Укажите её в настройках.',
+    launcherDbNotFound: 'База Paradox Launcher не найдена: {{items}}',
+    schema: 'Схема базы лаунчера не поддерживается.',
+    playsetNotFound: 'Плейсет не найден.',
+    noActivePlayset: 'В лаунчере нет активного плейсета.',
+    launcherRunning: 'Закройте Paradox Launcher: {{items}}',
+    processListUnavailable:
+      'Не удалось получить список процессов, поэтому нельзя проверить, закрыт ли лаунчер.',
+    playsetChanged: 'Плейсет изменился в лаунчере после анализа. Пересчитайте анализ.',
+    nothingToApply: 'Порядок уже правильный, применять нечего.',
+    cycle:
+      'Зависимости образуют цикл: {{items}}. Обычно его создаёт правило порядка против зависимости.',
+    notGameDir: 'Это не папка игры CK3: {{items}}',
+    logNotFound: 'Лог logs/database_conflicts.log не найден.',
+    rules: 'Файл правил не читается: {{items}}',
+    settings: 'Файл настроек не читается: {{items}}',
+    notAnalyzed: 'Плейсет ещё не проанализирован.',
+    io: 'Ошибка ввода-вывода: {{items}}',
+    db: 'Ошибка базы лаунчера.',
+  },
 };
