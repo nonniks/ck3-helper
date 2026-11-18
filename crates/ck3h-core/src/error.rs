@@ -27,8 +27,10 @@ pub enum CoreError {
     Cycle(Vec<String>),
     #[error("launcher is running: {}", .0.join(", "))]
     LauncherRunning(Vec<String>),
-    #[error("the playset changed since it was analysed; run `ck3h sort` again")]
+    #[error("the playset changed since it was analysed; analyse it again")]
     OrderMismatch,
     #[error("no launcher process names given; the launcher-running check cannot be skipped")]
     NoLauncherNames,
+    #[error("cannot read the process list to check whether the launcher is running")]
+    ProcessListUnavailable,
 }

@@ -119,6 +119,11 @@ fn exit_for(failure: &Failure) -> (u8, String) {
             2,
             format!("Close the Paradox Launcher first: {}", names.join(", ")),
         ),
+        Failure::Core(CoreError::ProcessListUnavailable) => (
+            1,
+            "Cannot check whether the Paradox Launcher is running: the process list is unavailable"
+                .to_string(),
+        ),
         Failure::Core(e) => (1, format!("error: {e}")),
         Failure::Message(m) => (1, format!("error: {m}")),
         // A reader that stops early (`ck3h conflicts | head`) is not an error.

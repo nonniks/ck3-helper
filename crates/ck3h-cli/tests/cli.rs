@@ -110,6 +110,7 @@ fn sort_apply_pins_the_outcome_for_the_launcher_state() {
     let rules = swap_rules(tmp.path());
     let launcher_running =
         !ck3h_core::apply::launcher_processes(ck3h_core::apply::DEFAULT_LAUNCHER_PROCESS_NAMES)
+            .unwrap()
             .is_empty();
     let out = cmd(&ud)
         .args(["sort", "--apply", "--rules"])

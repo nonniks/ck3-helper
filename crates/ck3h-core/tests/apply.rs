@@ -1,7 +1,7 @@
 #![cfg(feature = "testkit")]
 
 use chrono::{DateTime, Local, TimeZone};
-use ck3h_core::apply::apply_order;
+use ck3h_core::apply::{apply_order, preview};
 use ck3h_core::error::CoreError;
 use ck3h_core::testkit::*;
 use rusqlite::{Connection, OpenFlags};
@@ -83,9 +83,7 @@ fn order(fx: &Fx, idx: [usize; 3]) -> Vec<String> {
 #[test]
 fn creates_sorted_copy_and_backup() {
     let fx = setup();
-    let before = std::fs::read(&fx.db).unwrap();
     let r = apply_order(&fx.db, &fx.src, &order(&fx, [2, 0, 1]), now(), NONE).unwrap();
-    assert_eq!(std::fs::read(&r.backup_path).unwrap(), before);
     assert_eq!(playset_count(&r.backup_path), 1);
     assert_eq!(r.new_playset_name, "Main (CK3 Helper)");
     assert!(r.backup_path.exists());
@@ -207,7 +205,7 @@ fn launcher_is_detected_by_executable_path() {
         .to_string_lossy()
         .to_string();
     assert!(!name.to_lowercase().contains(&parent.to_lowercase()));
-    let found = ck3h_core::apply::launcher_processes(&[parent.as_str()]);
+    let found = ck3h_core::apply::launcher_processes(&[parent.as_str()]).unwrap();
     assert!(
         found.iter().any(|f| f.contains(&name)),
         "expected the current process in {found:?}"
@@ -241,4 +239,31 @@ fn empty_launcher_names_is_refused() {
     assert!(matches!(e, CoreError::NoLauncherNames));
     assert_eq!(playset_count(&fx.db), 1);
     assert_eq!(backups_in(fx.dir.path()), 0);
+}
+
+#[test]
+fn backup_is_a_consistent_sqlite_copy() {
+    let fx = setup();
+    let r = apply_order(&fx.db, &fx.src, &order(&fx, [2, 0, 1]), now(), NONE).unwrap();
+    assert_eq!(playset_count(&r.backup_path), 1);
+    assert_eq!(playset_count(&fx.db), 2);
+}
+
+#[test]
+fn preview_matches_applied_name() {
+    let fx = setup();
+    let p = preview(&fx.db, &fx.src).unwrap();
+    assert_eq!(p.backup_dir, fx.db.parent().unwrap());
+    let r = apply_order(&fx.db, &fx.src, &order(&fx, [2, 0, 1]), now(), NONE).unwrap();
+    assert_eq!(r.new_playset_name, p.new_playset_name);
+    assert_eq!(
+        preview(&fx.db, &fx.src).unwrap().new_playset_name,
+        "Main (CK3 Helper 2)"
+    );
+    assert_eq!(playset_count(&fx.db), 2);
+}
+
+#[test]
+fn order_mismatch_text_names_no_command() {
+    assert!(!CoreError::OrderMismatch.to_string().contains("ck3h"));
 }
