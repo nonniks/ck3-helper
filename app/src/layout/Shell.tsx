@@ -1,6 +1,6 @@
 import { Alert, AppShell, NavLink, Progress as ProgressBar, Stack, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AnalysisView } from '../api/bindings/AnalysisView';
 import { checkUpdate, getSetup } from '../api/client';
@@ -17,14 +17,6 @@ import { Header } from './Header';
 const screens = ['playset', 'conflicts', 'order', 'calibration', 'settings'] as const;
 type ScreenId = (typeof screens)[number];
 const needsAnalysis: ScreenId[] = ['conflicts', 'order', 'calibration'];
-
-const views: Record<ScreenId, ReactNode> = {
-  playset: <PlaysetScreen />,
-  conflicts: <ConflictsScreen />,
-  order: <OrderScreen />,
-  calibration: <CalibrationScreen />,
-  settings: <SettingsScreen />,
-};
 
 export function Shell() {
   const { t, i18n } = useTranslation();
@@ -93,9 +85,7 @@ export function Shell() {
           playsetName={analysis?.playset.name ?? null}
           busy={busy}
           canRefresh={analysis !== undefined}
-          onRefresh={() =>
-            analysis && runAnalyze({ playsetId: analysis.playset.id })
-          }
+          onRefresh={() => analysis && runAnalyze({ playsetId: analysis.playset.id })}
           settingsError={setupData?.settingsError ?? null}
           update={update.data ?? null}
         />
@@ -111,7 +101,13 @@ export function Shell() {
               <ProgressBar value={percent} animated />
             </div>
           )}
-          {views[active]}
+          {active === 'playset' && <PlaysetScreen />}
+          {active === 'conflicts' && <ConflictsScreen />}
+          {active === 'order' && <OrderScreen />}
+          {active === 'calibration' && (
+            <CalibrationScreen onOpenSettings={() => setActive('settings')} />
+          )}
+          {active === 'settings' && <SettingsScreen />}
         </Stack>
       </AppShell.Main>
     </AppShell>
