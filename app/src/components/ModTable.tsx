@@ -74,7 +74,7 @@ export function ModTable({
                     variant="light"
                     color="yellow"
                     data-warnings
-                    aria-label={`${t('playset.warnings', { count: mod.warnings })} — ${mod.name}`}
+                    aria-label={t('playset.warningsFor', { count: mod.warnings, name: mod.name })}
                     onClick={() => onShowWarnings(mod)}
                   >
                     {mod.warnings}
@@ -85,7 +85,7 @@ export function ModTable({
                   variant="subtle"
                   data-open
                   disabled={mod.missing}
-                  aria-label={`${t('playset.openFolder')} — ${mod.name}`}
+                  aria-label={t('playset.openFolderFor', { name: mod.name })}
                   leftSection={<IconFolderOpen size={14} />}
                   onClick={() => void pluginCall(() => revealItemInDir(mod.dir))}
                 >

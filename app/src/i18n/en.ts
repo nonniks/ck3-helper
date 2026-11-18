@@ -53,6 +53,8 @@ export const en = {
     replacePath: 'replaces folder {{path}}',
     disabled: 'disabled',
     warnings: 'Index warnings: {{count}}',
+    warningsFor: 'Index warnings: {{count}}, mod {{name}}',
+    openFolderFor: 'Open the folder of mod {{name}}',
     openFolder: 'Open folder',
     warningsTitle: 'Index warnings: {{name}}',
     warningsEmpty: 'No warnings.',

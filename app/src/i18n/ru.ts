@@ -53,6 +53,8 @@ export const ru = {
     replacePath: 'заменяет папку {{path}}',
     disabled: 'выключен',
     warnings: 'Предупреждения индекса: {{count}}',
+    warningsFor: 'Предупреждения индекса: {{count}}, мод {{name}}',
+    openFolderFor: 'Открыть папку мода {{name}}',
     openFolder: 'Открыть папку',
     warningsTitle: 'Предупреждения индекса: {{name}}',
     warningsEmpty: 'Предупреждений нет.',

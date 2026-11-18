@@ -45,6 +45,9 @@ export function PlaysetScreen() {
         {playsets.data?.map((p) => (
           <NavLink
             key={p.id}
+            component="button"
+            type="button"
+            aria-current={analysis?.playset.id === p.id ? 'true' : undefined}
             label={p.name}
             active={analysis?.playset.id === p.id}
             disabled={running}

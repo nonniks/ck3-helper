@@ -135,3 +135,16 @@ test('open folder is disabled for a missing mod', async () => {
   await user.click(rowFor('Base A').querySelector('[data-open]') as HTMLElement);
   expect(openerCalls).toEqual(['/mods/a-id']);
 });
+
+test('playset list is operable by keyboard', async () => {
+  const user = userEvent.setup();
+  renderScreen();
+  const item = await screen.findByRole('button', { name: 'Other' });
+  item.focus();
+  expect(item).toHaveFocus();
+  await user.keyboard('{Enter}');
+  await vi.waitFor(() => expect(invoked('analyze')).toMatchObject({ playsetId: 'other-id' }));
+  await vi.waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Other' })).toHaveAttribute('aria-current', 'true'),
+  );
+});
