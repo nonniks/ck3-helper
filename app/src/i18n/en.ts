@@ -223,7 +223,8 @@ export const en = {
     cycle: 'The dependencies form a cycle. A rule against a dependency usually causes it.',
     notGameDir: 'This is not a CK3 game folder.',
     rules: 'The rules file cannot be read.',
-    settings: 'The settings file cannot be read.',
+    settings:
+      'No launcher process names are set. In Settings → Advanced, press Default or enter the names, then save.',
     io: 'I/O error.',
   },
   errors: {
@@ -243,8 +244,10 @@ export const en = {
       'The dependencies form a cycle: {{items}}. A rule against a dependency usually causes it.',
     notGameDir: 'This is not a CK3 game folder: {{items}}',
     logNotFound: 'The log logs/database_conflicts.log was not found.',
-    rules: 'The rules file cannot be read: {{items}}',
-    settings: 'The settings file cannot be read: {{items}}',
+    rules:
+      'Rule or mod not found: the rules file or the analysis changed after the list was loaded.',
+    settings:
+      'No launcher process names are set. In Settings → Advanced, press Default or enter the names, then save.',
     notAnalyzed: 'The playset has not been analyzed yet.',
     io: 'I/O error: {{items}}',
     db: 'Launcher database error.',

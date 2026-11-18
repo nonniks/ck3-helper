@@ -18,7 +18,9 @@ pub enum ErrorCode {
     Cycle,
     NotGameDir,
     LogNotFound,
+    /// No items: `rules.toml` cannot be read or edited. Items: the rule index or mod id not found.
     Rules,
+    /// The launcher process name list is empty, so the launcher check cannot run.
     Settings,
     NotAnalyzed,
     Io,
