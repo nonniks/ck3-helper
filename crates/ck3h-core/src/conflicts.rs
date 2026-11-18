@@ -1,7 +1,7 @@
 //! Conflict engine: which file, database object and localization key wins, and why
 //! (spec §4.3, §4.4).
 
-use crate::deps::{DepGraph, DepIssue};
+use crate::deps::{DepClosure, DepGraph, DepIssue};
 use crate::index::{IndexWarning, LocDef, ModIndex, ObjectDef, RelPath, normalize};
 use crate::playset::ModEntry;
 use serde::Serialize;
@@ -150,6 +150,7 @@ pub(crate) fn analyze_ordered(
         .collect();
     let layers = layers(&active, vanilla);
     let files = loaded_files(&layers);
+    let closure = deps.closure();
     let mut conflicts = Vec::new();
 
     for (path, copies) in &files {
@@ -167,7 +168,7 @@ pub(crate) fn analyze_ordered(
                 winner,
                 copies,
                 WinReason::LowerInPlayset,
-                deps,
+                &closure,
             ));
         }
     }
@@ -188,7 +189,7 @@ pub(crate) fn analyze_ordered(
                 winner,
                 defs,
                 WinReason::LaterFilePath,
-                deps,
+                &closure,
             ));
         }
     }
@@ -201,7 +202,7 @@ pub(crate) fn analyze_ordered(
                 winner,
                 losers,
                 reason,
-                deps,
+                &closure,
             ));
         }
     }
@@ -328,57 +329,57 @@ fn loaded_files<'a>(layers: &[Layer<'a>]) -> BTreeMap<&'a str, Copies<'a, RelPat
     files
 }
 
-/// Definitions from loaded files only, in read order: by file path, then top to bottom.
-fn in_read_order<'a, T>(
+/// Definitions from loaded files only, grouped by `name`; each group in read order: by file
+/// path, then top to bottom. Groups are filled layer by layer and sorted stably, so ties keep
+/// layer order.
+fn grouped_in_read_order<'a, T>(
     layers: &[Layer<'a>],
     files: &BTreeMap<&'a str, Copies<'a, RelPath>>,
     defs: impl Fn(&'a ModIndex) -> &'a [T],
+    name: impl Fn(&'a T) -> (&'a str, &'a str),
     position: impl Fn(&T) -> (&RelPath, u32),
-) -> Copies<'a, T> {
-    let mut out: Copies<'a, T> = Vec::new();
+) -> BTreeMap<(&'a str, &'a str), Copies<'a, T>> {
+    let mut grouped: BTreeMap<(&'a str, &'a str), Copies<'a, T>> = BTreeMap::new();
     for (i, layer) in layers.iter().enumerate() {
-        out.extend(
-            defs(layer.index)
-                .iter()
-                .filter(|def| {
-                    let loaded = files
-                        .get(position(def).0.norm.as_str())
-                        .and_then(|c| c.last());
-                    loaded.is_some_and(|&(by, _)| by == i)
-                })
-                .map(|def| (i, def)),
-        );
+        for def in defs(layer.index) {
+            let loaded = files
+                .get(position(def).0.norm.as_str())
+                .and_then(|c| c.last());
+            if loaded.is_some_and(|&(by, _)| by == i) {
+                grouped.entry(name(def)).or_default().push((i, def));
+            }
+        }
     }
-    out.sort_by(|(_, a), (_, b)| position(a).cmp(&position(b)));
-    out
+    for group in grouped.values_mut() {
+        group.sort_by(|(_, a), (_, b)| position(a).cmp(&position(b)));
+    }
+    grouped
 }
 
 fn object_defs<'a>(
     layers: &[Layer<'a>],
     files: &BTreeMap<&'a str, Copies<'a, RelPath>>,
 ) -> BTreeMap<(&'a str, &'a str), Copies<'a, ObjectDef>> {
-    let mut grouped: BTreeMap<(&str, &str), Copies<ObjectDef>> = BTreeMap::new();
-    for (i, def) in in_read_order(layers, files, |x| &x.objects, |o| (&o.file, o.ordinal)) {
-        grouped
-            .entry((def.database.as_str(), def.key.as_str()))
-            .or_default()
-            .push((i, def));
-    }
-    grouped
+    grouped_in_read_order(
+        layers,
+        files,
+        |x| &x.objects,
+        |o| (&o.database, &o.key),
+        |o| (&o.file, o.ordinal),
+    )
 }
 
 fn loc_defs<'a>(
     layers: &[Layer<'a>],
     files: &BTreeMap<&'a str, Copies<'a, RelPath>>,
 ) -> BTreeMap<(&'a str, &'a str), Copies<'a, LocDef>> {
-    let mut grouped: BTreeMap<(&str, &str), Copies<LocDef>> = BTreeMap::new();
-    for (i, def) in in_read_order(layers, files, |x| &x.loc, |l| (&l.file, l.ordinal)) {
-        grouped
-            .entry((def.lang.as_str(), def.key.as_str()))
-            .or_default()
-            .push((i, def));
-    }
-    grouped
+    grouped_in_read_order(
+        layers,
+        files,
+        |x| &x.loc,
+        |l| (&l.lang, &l.key),
+        |l| (&l.file, l.ordinal),
+    )
 }
 
 /// The first regular definition wins unless a `replace` file overrides it;
@@ -414,7 +415,7 @@ fn conflict(
     winner: Contender,
     losers: Vec<Contender>,
     reason: WinReason,
-    deps: &DepGraph,
+    closure: &DepClosure,
 ) -> Conflict {
     let mut others: Vec<&Source> = Vec::new();
     for loser in &losers {
@@ -427,7 +428,7 @@ fn conflict(
         Verdict::Vanilla
     } else if let Source::Mod(winner_id) = &winner.source
         && others.iter().all(|other| match other {
-            Source::Mod(loser_id) => deps.depends_on(winner_id, loser_id),
+            Source::Mod(loser_id) => closure.depends_on(winner_id, loser_id),
             Source::Vanilla => true,
         })
     {

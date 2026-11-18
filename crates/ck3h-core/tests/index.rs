@@ -11,7 +11,7 @@ fn norms(files: &[RelPath]) -> Vec<&str> {
 fn keys(objects: &[ObjectDef]) -> Vec<(&str, &str, u32)> {
     objects
         .iter()
-        .map(|o| (o.database.as_str(), o.key.as_str(), o.ordinal))
+        .map(|o| (&*o.database, o.key.as_str(), o.ordinal))
         .collect()
 }
 

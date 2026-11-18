@@ -119,4 +119,79 @@ impl DepGraph {
         }
         false
     }
+
+    /// Every mod's transitive dependencies, walking the graph once per mod.
+    pub fn closure(&self) -> DepClosure {
+        let mut direct: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for (dep, user) in &self.edges {
+            direct.entry(user).or_default().push(dep);
+        }
+        let mut reached = BTreeMap::new();
+        for &start in direct.keys() {
+            let mut seen: BTreeSet<&str> = BTreeSet::new();
+            let mut stack = vec![start];
+            while let Some(current) = stack.pop() {
+                for &next in direct.get(current).into_iter().flatten() {
+                    if seen.insert(next) {
+                        stack.push(next);
+                    }
+                }
+            }
+            reached.insert(
+                start.to_string(),
+                seen.into_iter().map(str::to_string).collect(),
+            );
+        }
+        DepClosure { reached }
+    }
+}
+
+/// Answers `DepGraph::depends_on` without walking the graph again.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DepClosure {
+    /// Dependent → every mod it reaches through the edges (itself only through a cycle).
+    reached: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl DepClosure {
+    pub fn depends_on(&self, dependent: &str, dependency: &str) -> bool {
+        self.reached
+            .get(dependent)
+            .is_some_and(|deps| deps.contains(dependency))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn closure_matches_depends_on() {
+        // Edges (dependency, dependent): a chain A → B → C and a cycle X ⇄ Y.
+        let g = DepGraph {
+            edges: [("A", "B"), ("B", "C"), ("X", "Y"), ("Y", "X")]
+                .into_iter()
+                .map(|(dep, user)| (dep.to_string(), user.to_string()))
+                .collect(),
+            issues: Vec::new(),
+            compatches: BTreeSet::new(),
+        };
+        let closure = g.closure();
+        for (d, on) in [
+            ("C", "A"),
+            ("A", "C"),
+            ("Y", "X"),
+            ("X", "Y"),
+            ("C", "X"),
+            ("X", "X"),
+            ("A", "A"),
+            ("nope", "A"),
+        ] {
+            assert_eq!(
+                closure.depends_on(d, on),
+                g.depends_on(d, on),
+                "{d} on {on}"
+            );
+        }
+    }
 }

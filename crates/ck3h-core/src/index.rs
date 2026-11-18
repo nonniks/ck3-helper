@@ -6,9 +6,10 @@ use crate::text::decode;
 use jomini::TextTape;
 use serde::Serialize;
 use std::cmp::Ordering;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{DirEntry, ReadDir};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// `\` → `/`; lowercase except on Linux, whose filesystem is case-sensitive.
 pub fn normalize(display: &str) -> String {
@@ -63,21 +64,23 @@ impl PartialOrd for RelPath {
 }
 
 /// A top-level key of a database file; `ordinal` counts objects within the file.
+/// `database` and `file` are shared by every definition of the index from that database and file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ObjectDef {
-    pub database: String,
+    pub database: Arc<str>,
     pub key: String,
-    pub file: RelPath,
+    pub file: Arc<RelPath>,
     pub ordinal: u32,
 }
 
 /// A localization entry; `ordinal` counts entries within the file.
+/// `lang` and `file` are shared by every entry of the index from that language and file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LocDef {
-    pub lang: String,
+    pub lang: Arc<str>,
     pub key: String,
     pub value: String,
-    pub file: RelPath,
+    pub file: Arc<RelPath>,
     pub is_replace: bool,
     pub ordinal: u32,
 }
@@ -177,9 +180,10 @@ fn index_layer(root: &Path, lang: &str, skip_dir: Option<&str>) -> Result<ModInd
         &mut found,
         &mut index.warnings,
     );
-    let lang = format!("l_{}", lang.strip_prefix("l_").unwrap_or(lang));
+    let lang: Arc<str> = format!("l_{}", lang.strip_prefix("l_").unwrap_or(lang)).into();
+    let mut databases = BTreeMap::new();
     for (file, path) in found {
-        index_file(&file, &path, &lang, &mut index);
+        index_file(&file, &path, &lang, &mut databases, &mut index);
         index.files.push(file);
     }
     index.sort();
@@ -260,14 +264,21 @@ fn walk(
     }
 }
 
-fn index_file(file: &RelPath, path: &Path, lang: &str, index: &mut ModIndex) {
+/// `databases` holds the one shared name per database of the index.
+fn index_file(
+    file: &RelPath,
+    path: &Path,
+    lang: &Arc<str>,
+    databases: &mut BTreeMap<String, Arc<str>>,
+    index: &mut ModIndex,
+) {
     let database = database_root(&file.norm).filter(|db| {
         file.norm.ends_with(".txt") && !OBJECT_ANALYSIS_EXCLUDED.contains(&db.as_str())
     });
     let file_name = file.norm.rsplit('/').next().unwrap_or_default();
     let is_loc = file.norm.starts_with("localization/")
         && file_name.ends_with(".yml")
-        && file_name.contains(lang);
+        && file_name.contains(&**lang);
     if database.is_none() && !is_loc {
         return;
     }
@@ -285,16 +296,22 @@ fn index_file(file: &RelPath, path: &Path, lang: &str, index: &mut ModIndex) {
     if invalid_utf8 {
         warn("invalid UTF-8".into());
     }
+    let shared_file = Arc::new(file.clone());
     if let Some(database) = database {
         match top_level_keys(&text) {
-            Ok(keys) => index
-                .objects
-                .extend((0u32..).zip(keys).map(|(ordinal, key)| ObjectDef {
-                    database: database.clone(),
-                    key,
-                    file: file.clone(),
-                    ordinal,
-                })),
+            Ok(keys) => {
+                let database = databases
+                    .entry(database)
+                    .or_insert_with_key(|db| Arc::from(db.as_str()));
+                index
+                    .objects
+                    .extend((0u32..).zip(keys).map(|(ordinal, key)| ObjectDef {
+                        database: database.clone(),
+                        key,
+                        file: shared_file.clone(),
+                        ordinal,
+                    }))
+            }
             Err(message) => warn(message),
         }
     } else {
@@ -303,10 +320,10 @@ fn index_file(file: &RelPath, path: &Path, lang: &str, index: &mut ModIndex) {
             (0u32..)
                 .zip(loc_entries(&text))
                 .map(|(ordinal, (key, value))| LocDef {
-                    lang: lang.to_string(),
+                    lang: lang.clone(),
                     key: key.to_string(),
                     value: value.to_string(),
-                    file: file.clone(),
+                    file: shared_file.clone(),
                     is_replace,
                     ordinal,
                 }),
