@@ -152,6 +152,33 @@ test('apply flow shows the copy name and reveals the backup', async () => {
   expect(invoked('plugin:opener|reveal_item_in_dir')).toBeTruthy();
 });
 
+test('saved result survives leaving the Order screen for more than 5 minutes', async () => {
+  const user = userEvent.setup();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(queryKeys.summary, analysis);
+  const ui = (
+    <QueryClientProvider client={client}>
+      <MantineProvider>
+        <OrderScreen />
+      </MantineProvider>
+    </QueryClientProvider>
+  );
+  const first = render(ui);
+  await user.click(await saveButton());
+  await user.click(await screen.findByRole('button', { name: ru.apply.confirm }));
+  expect((await screen.findAllByText(doneTitle)).length).toBeGreaterThan(0);
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    first.unmount();
+    await vi.advanceTimersByTimeAsync(6 * 60 * 1000);
+    render(ui);
+    expect(await screen.findByText(doneTitle)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: ru.apply.save })).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test('changed playset offers to recalculate', async () => {
   handlers.apply = () => Promise.reject({ code: 'playsetChanged', items: [] });
   const user = userEvent.setup();

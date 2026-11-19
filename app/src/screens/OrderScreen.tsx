@@ -61,6 +61,8 @@ export function OrderScreen() {
     queryKey: queryKeys.applied,
     queryFn: () => null,
     enabled: false,
+    // Only written by a successful save; a garbage-collected entry would offer the save again.
+    gcTime: Infinity,
   }).data;
   // After a save the same proposal must not be offered again (Rust spent it).
   const proposal = useQuery({
