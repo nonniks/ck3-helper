@@ -3,6 +3,7 @@ name = "ck3h-app"
 version = "0.1.0"
 description = "CK3 Helper desktop app"
 license = "GPL-3.0-or-later"
+repository = "https://github.com/nonniks/ck3-helper"
 edition = "2024"
 
 [lib]

@@ -1,3 +1,4 @@
+use ck3h_app::dto::UpdateView;
 use ck3h_app::error::ErrorCode;
 use ck3h_app::settings::{Settings, save_settings};
 use ck3h_app::state::AppState;
@@ -79,11 +80,56 @@ fn calibrate_needs_analysis() {
 
 const REPO: &str = "https://github.com/o/ck3-helper";
 
+/// A release fetcher that never reaches the network: records the API URLs it was asked for.
+struct FakeFetch {
+    calls: std::cell::RefCell<Vec<String>>,
+    answer: Option<UpdateView>,
+}
+
+impl FakeFetch {
+    fn new(answer: Option<UpdateView>) -> Self {
+        Self {
+            calls: Default::default(),
+            answer,
+        }
+    }
+
+    fn fetch(&self, api: &str) -> Result<Option<UpdateView>, String> {
+        self.calls.borrow_mut().push(api.to_string());
+        Ok(self.answer.clone())
+    }
+}
+
 #[test]
 fn check_update_without_repository_does_nothing() {
     let f = fixture();
-    assert_eq!(f.state.check_update_with("", 1_000_000), None);
+    let fake = FakeFetch::new(None);
+    assert_eq!(
+        f.state.check_update_with("", 1_000_000, |a| fake.fetch(a)),
+        None
+    );
     assert_eq!(f.state.settings().update_checked_at, None);
+    assert!(fake.calls.borrow().is_empty());
+}
+
+#[test]
+fn check_update_when_due_fetches_once_and_records_the_day() {
+    let f = fixture();
+    let release = UpdateView {
+        version: "9.9.9".into(),
+        url: "https://example.test/r".into(),
+    };
+    let fake = FakeFetch::new(Some(release.clone()));
+    assert_eq!(
+        f.state
+            .check_update_with(REPO, 1_000_000, |a| fake.fetch(a)),
+        Some(release)
+    );
+    assert_eq!(
+        *fake.calls.borrow(),
+        ["https://api.github.com/repos/o/ck3-helper/releases/latest"]
+    );
+    assert_eq!(f.state.settings().update_checked_at, Some(1_000_000));
 }
 
 #[test]
@@ -92,8 +138,14 @@ fn check_update_not_due_does_nothing() {
     let mut s = f.state.settings();
     s.update_checked_at = Some(1_000_000);
     f.state.save_settings(s).unwrap();
-    assert_eq!(f.state.check_update_with(REPO, 1_000_100), None);
+    let fake = FakeFetch::new(None);
+    assert_eq!(
+        f.state
+            .check_update_with(REPO, 1_000_100, |a| fake.fetch(a)),
+        None
+    );
     assert_eq!(f.state.settings().update_checked_at, Some(1_000_000));
+    assert!(fake.calls.borrow().is_empty());
 }
 
 #[test]
@@ -104,7 +156,12 @@ fn check_update_leaves_broken_settings_alone() {
     let state = AppState::new(config.path().to_path_buf());
     // Not `setup()`: with broken settings it falls back to the real default CK3 folders.
     assert!(state.settings_error().is_some());
-    assert_eq!(state.check_update_with(REPO, 1_000_000), None);
+    let fake = FakeFetch::new(None);
+    assert_eq!(
+        state.check_update_with(REPO, 1_000_000, |a| fake.fetch(a)),
+        None
+    );
+    assert!(fake.calls.borrow().is_empty());
     assert_eq!(
         std::fs::read_to_string(&file).unwrap(),
         "this is = = not toml"

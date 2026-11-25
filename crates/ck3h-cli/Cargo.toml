@@ -3,6 +3,7 @@ name = "ck3h-cli"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
+repository = "https://github.com/nonniks/ck3-helper"
 
 [[bin]]
 name = "ck3h"

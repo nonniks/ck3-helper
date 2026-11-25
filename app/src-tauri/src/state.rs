@@ -458,12 +458,20 @@ impl AppState {
     /// no settings write. Otherwise the day is recorded whatever the outcome; errors are silent.
     /// Recording it does not reset the analysis (only folder or language changes do).
     pub fn check_update(&self, now: i64) -> Option<UpdateView> {
-        self.check_update_with(env!("CARGO_PKG_REPOSITORY"), now)
+        self.check_update_with(env!("CARGO_PKG_REPOSITORY"), now, |api| {
+            update::fetch_latest(api, env!("CARGO_PKG_VERSION"))
+        })
     }
 
-    /// `check_update` for a given repository URL. A broken `settings.toml` is left alone: no
-    /// request and no write (saving would replace the file and clear the error banner).
-    pub fn check_update_with(&self, repository: &str, now: i64) -> Option<UpdateView> {
+    /// `check_update` for a given repository URL and release fetcher (given the API URL). A
+    /// broken `settings.toml` is left alone: no request and no write (saving would replace the
+    /// file and clear the error banner).
+    pub fn check_update_with(
+        &self,
+        repository: &str,
+        now: i64,
+        fetch: impl FnOnce(&str) -> Result<Option<UpdateView>, String>,
+    ) -> Option<UpdateView> {
         if lock(&self.settings_error).is_some() {
             return None;
         }
@@ -472,9 +480,7 @@ impl AppState {
             return None;
         }
         let api = update::releases_api(repository)?;
-        let found = update::fetch_latest(&api, env!("CARGO_PKG_VERSION"))
-            .ok()
-            .flatten();
+        let found = fetch(&api).ok().flatten();
         let mut settings = self.settings();
         settings.update_checked_at = Some(now);
         let _ = self.save_settings(settings);
