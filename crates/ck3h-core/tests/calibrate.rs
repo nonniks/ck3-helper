@@ -111,7 +111,13 @@ fn last_run_matches_enabled_mods_and_tolerates_bad_input() {
     {
         std::fs::write(
             user.join(format!("mod/m{i}.mod")),
-            format!("name=\"{}\"\npath=\"{}\"\n", m.name, m.dir.display()),
+            // The launcher writes `path` with forward slashes on every OS; a backslash in a
+            // quoted Paradox string is an escape, so `C:\Users` would not survive parsing.
+            format!(
+                "name=\"{}\"\npath=\"{}\"\n",
+                m.name,
+                m.dir.display().to_string().replace('\\', "/")
+            ),
         )
         .unwrap();
         listed.push(format!("mod/m{i}.mod"));
