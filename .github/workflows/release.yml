@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            args: --target universal-apple-darwin
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - os: ubuntu-22.04
+            args: ''
+            targets: ''
+          - os: windows-latest
+            args: ''
+            targets: ''
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: '. -> target'
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - run: npm ci --prefix app
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          tagName: ${{ github.ref_name }}
+          releaseName: CK3 Helper ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+          releaseBody: |
+            ## Первый запуск / First launch
+
+            Программа не подписана, поэтому ОС предупредит при первом запуске.
+            The app is unsigned, so the OS will warn you on first launch.
+
+            **Windows (NSIS `.exe`)**
+            - RU: в окне SmartScreen нажмите «Подробнее → Выполнить в любом случае».
+            - EN: in the SmartScreen dialog choose "More info → Run anyway".
+
+            **macOS (`.dmg`)**
+            - RU: «Системные настройки → Конфиденциальность и безопасность → Всё равно открыть», либо в Терминале: `xattr -dr com.apple.quarantine "/Applications/CK3 Helper.app"`.
+            - EN: "System Settings → Privacy & Security → Open Anyway", or in Terminal: `xattr -dr com.apple.quarantine "/Applications/CK3 Helper.app"`.
+
+            **Linux (`.AppImage`, `.deb`)**
+            - RU: для AppImage — `chmod +x CK3.Helper*.AppImage`, затем запуск.
+            - EN: for AppImage — `chmod +x CK3.Helper*.AppImage`, then run it.
+
+            Подробнее / Details: ${{ github.server_url }}/${{ github.repository }}#readme
+
+            **Windows**
+            - RU: Windows проверена автотестами; ручная проверка — на этом черновике. Сообщите о проблемах в Issues.
+            - EN: Windows is covered by automated tests; manual checking happens on this first draft. Please report problems in Issues.
